@@ -21,9 +21,9 @@ An Android app that **automatically starts playing a radio/audio stream when you
 
 ## 📱 Compatibility
 
-- **Minimum SDK:** API 16 (Android 4.1 Jelly Bean)
+- **Minimum SDK:** API 19 (Android 4.4 KitKat)
 - **Target SDK:** API 33 (Android 13)
-- Works on all Android versions from 4.1 to 14+
+- Works on Android versions from 4.4 to modern Android releases
 
 ---
 

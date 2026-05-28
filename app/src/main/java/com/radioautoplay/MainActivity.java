@@ -1,9 +1,11 @@
 package com.radioautoplay;
 
+import android.Manifest;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.TextUtils;
@@ -14,8 +16,11 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -36,6 +41,14 @@ public class MainActivity extends AppCompatActivity {
     private RecyclerView rvUrls;
 
     private boolean serviceRunning = false;
+    private final ActivityResultLauncher<String> notificationPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                if (!granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    Toast.makeText(this,
+                            "Playback works, but Android may hide the foreground notification.",
+                            Toast.LENGTH_LONG).show();
+                }
+            });
 
     // ── BroadcastReceiver for service state ───────────────────────────────────
 
@@ -64,6 +77,7 @@ public class MainActivity extends AppCompatActivity {
         setupRecyclerView();
         setupControls();
         refreshShuffleSwitch();
+        requestNotificationPermissionIfNeeded();
     }
 
     @Override
@@ -71,7 +85,7 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         // Register for service state broadcasts
         IntentFilter filter = new IntentFilter(RadioService.BROADCAST_STATE);
-        registerReceiver(serviceReceiver, filter);
+        ContextCompat.registerReceiver(this, serviceReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
         refreshList();
     }
 
@@ -156,6 +170,14 @@ public class MainActivity extends AppCompatActivity {
 
     private void refreshShuffleSwitch() {
         switchShuffle.setChecked(urlManager.isShuffleEnabled());
+    }
+
+    private void requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return;
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+        }
     }
 
     // ── Actions ───────────────────────────────────────────────────────────────

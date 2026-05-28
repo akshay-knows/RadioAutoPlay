@@ -57,12 +57,12 @@ public class UrlAdapter extends RecyclerView.Adapter<UrlAdapter.ViewHolder> {
 
         h.btnDelete.setOnClickListener(v -> {
             int pos = h.getAdapterPosition();
-            if (pos != RecyclerView.NO_ID) listener.onDelete(pos);
+            if (pos != RecyclerView.NO_POSITION) listener.onDelete(pos);
         });
 
         h.btnPlay.setOnClickListener(v -> {
             int pos = h.getAdapterPosition();
-            if (pos != RecyclerView.NO_ID) listener.onPlay(pos);
+            if (pos != RecyclerView.NO_POSITION) listener.onPlay(pos);
         });
     }
 

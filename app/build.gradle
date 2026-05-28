@@ -1,12 +1,12 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 33
-    buildToolsVersion "33.0.2"
+    namespace "com.radioautoplay"
+    compileSdkVersion 35
 
     defaultConfig {
         applicationId "com.radioautoplay"
-        minSdkVersion 16          // Android 4.1 Jelly Bean
+        minSdkVersion 19          // Android 4.4 KitKat
         targetSdkVersion 33
         versionCode 1
         versionName "1.0"
@@ -30,14 +30,25 @@ android {
 
     // Needed for older API support
     packagingOptions {
-        exclude 'META-INF/DEPENDENCIES'
-        exclude 'META-INF/LICENSE'
-        exclude 'META-INF/NOTICE'
+        resources {
+            excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE', 'META-INF/NOTICE']
+        }
+    }
+}
+
+configurations.configureEach {
+    resolutionStrategy {
+        force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
     }
 }
 
 dependencies {
+    implementation 'androidx.activity:activity:1.7.2'
+    implementation 'androidx.core:core:1.13.1'
     implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.cardview:cardview:1.0.0'
     implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.recyclerview:recyclerview:1.3.1'
