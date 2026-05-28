@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_dark"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- ── Header ─────────────────────────────────────── -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Radio AutoPlay"
+                android:textColor="@color/text_primary"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="● Idle"
+                android:textColor="@color/idle_grey"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- ── Now playing card ───────────────────────────── -->
+        <androidx.cardview.widget.CardView
+            xmlns:card_view="http://schemas.android.com/apk/res-auto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            card_view:cardBackgroundColor="@color/card_bg"
+            card_view:cardCornerRadius="12dp"
+            card_view:cardElevation="4dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="NOW PLAYING"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:letterSpacing="0.1"
+                    android:layout_marginBottom="6dp" />
+
+                <TextView
+                    android:id="@+id/tv_current_url"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="—"
+                    android:textColor="@color/text_primary"
+                    android:textSize="13sp"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:layout_marginBottom="12dp" />
+
+                <Button
+                    android:id="@+id/btn_play_stop"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="▶  Play"
+                    android:textColor="@color/white"
+                    android:backgroundTint="@color/accent"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- ── Shuffle toggle ─────────────────────────────── -->
+        <androidx.cardview.widget.CardView
+            xmlns:card_view="http://schemas.android.com/apk/res-auto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            card_view:cardBackgroundColor="@color/card_bg"
+            card_view:cardCornerRadius="12dp"
+            card_view:cardElevation="4dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Shuffle on plug-in"
+                        android:textColor="@color/text_primary"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Pick a random stream every time charger is connected"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_shuffle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true" />
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- ── Add stream ─────────────────────────────────── -->
+        <androidx.cardview.widget.CardView
+            xmlns:card_view="http://schemas.android.com/apk/res-auto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            card_view:cardBackgroundColor="@color/card_bg"
+            card_view:cardCornerRadius="12dp"
+            card_view:cardElevation="4dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ADD STREAM URL"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:letterSpacing="0.1"
+                    android:layout_marginBottom="8dp" />
+
+                <EditText
+                    android:id="@+id/et_new_url"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="https://example.com/stream"
+                    android:inputType="textUri"
+                    android:textColor="@color/text_primary"
+                    android:textColorHint="@color/text_secondary"
+                    android:background="@drawable/bg_input"
+                    android:padding="12dp"
+                    android:layout_marginBottom="8dp"
+                    android:imeOptions="actionDone"
+                    android:maxLines="2" />
+
+                <Button
+                    android:id="@+id/btn_add"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="+ Add Stream"
+                    android:textColor="@color/accent"
+                    android:backgroundTint="@color/card_bg"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- ── Stream list ────────────────────────────────── -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="SAVED STREAMS"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp"
+            android:letterSpacing="0.1"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/tv_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="No streams added yet.\nTap '+ Add Stream' to get started."
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:gravity="center"
+            android:padding="24dp"
+            android:visibility="visible" />
+
+        <!-- Non-scrollable RecyclerView inside ScrollView -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_urls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:nestedScrollingEnabled="false"
+            android:visibility="gone" />
+
+    </LinearLayout>
+</ScrollView>
