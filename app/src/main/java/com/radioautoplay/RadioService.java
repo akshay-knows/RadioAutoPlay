@@ -12,11 +12,19 @@ import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.wifi.WifiManager;
 import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.PowerManager;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
+
+import java.util.List;
+import java.util.Locale;
 
 /**
  * Foreground service that manages MediaPlayer for radio streaming.
@@ -27,6 +35,9 @@ public class RadioService extends Service {
     private static final String TAG          = "RadioService";
     private static final String CHANNEL_ID   = "radio_channel";
     private static final int    NOTIF_ID     = 1;
+    private static final long   STREAM_START_TIMEOUT_MS = 60_000L;
+    private static final long   ANNOUNCEMENT_FALLBACK_MS = 12_000L;
+    private static final String INTRO_UTTERANCE_ID = "bathroom_intro";
 
     public static final String ACTION_PLAY   = "com.radioautoplay.PLAY";
     public static final String ACTION_STOP   = "com.radioautoplay.STOP";
@@ -37,18 +48,27 @@ public class RadioService extends Service {
     public static final String EXTRA_PLAYING   = "is_playing";
     public static final String EXTRA_URL_NOW   = "current_url";
     public static final String EXTRA_ERROR     = "error_msg";
+    public static final String EXTRA_STATUS    = "status_msg";
 
     private MediaPlayer mediaPlayer;
+    private TextToSpeech textToSpeech;
     private PowerManager.WakeLock wakeLock;
     private WifiManager.WifiLock  wifiLock;
+    private StreamUrlManager urlManager;
+    private Handler handler;
     private String currentUrl;
+    private Runnable streamStartTimeout;
     private boolean isPlaying = false;
+    private int failoverAttempts = 0;
+    private int playbackRequestId = 0;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     @Override
     public void onCreate() {
         super.onCreate();
+        handler = new Handler(Looper.getMainLooper());
+        urlManager = new StreamUrlManager(this);
         createNotificationChannel();
         acquireLocks();
     }
@@ -61,9 +81,13 @@ public class RadioService extends Service {
         if (ACTION_PLAY.equals(action)) {
             String url = intent.getStringExtra(EXTRA_URL);
             if (url != null && !url.isEmpty()) {
-                startPlayback(url);
+                failoverAttempts = 0;
+                playbackRequestId++;
+                startPlaybackAfterAnnouncement(url, playbackRequestId);
             }
         } else if (ACTION_STOP.equals(action)) {
+            playbackRequestId++;
+            shutdownTextToSpeech();
             stopPlayback();
             stopSelf();
         }
@@ -75,15 +99,73 @@ public class RadioService extends Service {
 
     @Override
     public void onDestroy() {
-        stopPlayback();
+        stopPlayback(false);
+        shutdownTextToSpeech();
         releaseLocks();
         super.onDestroy();
     }
 
     // ── Playback ──────────────────────────────────────────────────────────────
 
-    private void startPlayback(String url) {
-        stopPlayback(); // release previous player if any
+    private void startPlaybackAfterAnnouncement(String url, int requestId) {
+        stopPlayback(false);
+        currentUrl = url;
+        startForeground(NOTIF_ID, buildNotification("Welcome announcement", url));
+        broadcastState(false, null, "Welcome announcement and countdown");
+
+        Runnable fallback = () -> {
+            if (requestId == playbackRequestId && mediaPlayer == null && !isPlaying) {
+                Log.w(TAG, "Announcement timed out; starting stream anyway.");
+                shutdownTextToSpeech();
+                startPlayback(url, requestId);
+            }
+        };
+        handler.postDelayed(fallback, ANNOUNCEMENT_FALLBACK_MS);
+
+        textToSpeech = new TextToSpeech(getApplicationContext(), status -> {
+            if (requestId != playbackRequestId) return;
+            if (textToSpeech == null || mediaPlayer != null || isPlaying) return;
+            if (status != TextToSpeech.SUCCESS) {
+                Log.w(TAG, "TextToSpeech init failed; starting stream without intro.");
+                handler.removeCallbacks(fallback);
+                startPlayback(url, requestId);
+                return;
+            }
+
+            textToSpeech.setLanguage(Locale.US);
+            textToSpeech.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                @Override
+                public void onStart(String utteranceId) { }
+
+                @Override
+                public void onDone(String utteranceId) {
+                    handler.post(() -> {
+                        if (requestId != playbackRequestId) return;
+                        handler.removeCallbacks(fallback);
+                        shutdownTextToSpeech();
+                        startPlayback(url, requestId);
+                    });
+                }
+
+                @Override
+                public void onError(String utteranceId) {
+                    handler.post(() -> {
+                        if (requestId != playbackRequestId) return;
+                        handler.removeCallbacks(fallback);
+                        shutdownTextToSpeech();
+                        startPlayback(url, requestId);
+                    });
+                }
+            });
+
+            speakIntro(requestId);
+        });
+    }
+
+    private void startPlayback(String url, int requestId) {
+        stopPlayback(false); // release previous player if any
+        if (requestId != playbackRequestId) return;
+
         currentUrl = url;
         Log.d(TAG, "Starting playback: " + url);
 
@@ -106,20 +188,30 @@ public class RadioService extends Service {
             mediaPlayer.setDataSource(url);
             mediaPlayer.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
             mediaPlayer.prepareAsync(); // non-blocking
+            streamStartTimeout = () -> {
+                if (requestId == playbackRequestId && mediaPlayer != null && !isPlaying) {
+                    Log.w(TAG, "Stream did not start within one minute: " + currentUrl);
+                    switchToAnotherStream("Stream did not start in 1 minute");
+                }
+            };
+            handler.postDelayed(streamStartTimeout, STREAM_START_TIMEOUT_MS);
 
             mediaPlayer.setOnPreparedListener(mp -> {
+                if (requestId != playbackRequestId) return;
+                cancelStreamWatchdog();
                 mp.start();
                 isPlaying = true;
                 broadcastState(true, null);
-                updateNotification("▶ Playing", currentUrl);
+                updateNotification("Playing", currentUrl);
                 Log.d(TAG, "Playback started");
             });
 
             mediaPlayer.setOnErrorListener((mp, what, extra) -> {
                 Log.e(TAG, "MediaPlayer error: " + what + ", " + extra);
                 isPlaying = false;
-                broadcastState(false, "Stream error (code " + what + ")");
-                stopSelf();
+                if (requestId == playbackRequestId) {
+                    switchToAnotherStream("Stream error (code " + what + ")");
+                }
                 return true;
             });
 
@@ -129,17 +221,22 @@ public class RadioService extends Service {
             });
 
             // Show "connecting…" notification immediately
-            startForeground(NOTIF_ID, buildNotification("Connecting…", url));
+            startForeground(NOTIF_ID, buildNotification("Connecting", url));
+            broadcastState(false, null, "Connecting to music");
 
         } catch (Exception e) {
             Log.e(TAG, "Error setting up MediaPlayer", e);
-            broadcastState(false, "Cannot open stream: " + e.getMessage());
-            stopSelf();
+            switchToAnotherStream("Cannot open stream: " + e.getMessage());
         }
     }
 
     private void stopPlayback() {
+        stopPlayback(true);
+    }
+
+    private void stopPlayback(boolean broadcastIdle) {
         isPlaying = false;
+        cancelStreamWatchdog();
         if (mediaPlayer != null) {
             try {
                 if (mediaPlayer.isPlaying()) mediaPlayer.stop();
@@ -150,7 +247,98 @@ public class RadioService extends Service {
             }
             mediaPlayer = null;
         }
-        broadcastState(false, null);
+        if (broadcastIdle) {
+            broadcastState(false, null);
+        }
+    }
+
+    private void switchToAnotherStream(String reason) {
+        cancelStreamWatchdog();
+        releaseMediaPlayerOnly();
+
+        List<String> urls = urlManager.getUrls();
+        if (urls.size() <= 1) {
+            broadcastState(false, reason + ". No backup stream is saved.");
+            updateNotification("No backup stream", currentUrl);
+            stopSelf();
+            return;
+        }
+
+        failoverAttempts++;
+        if (failoverAttempts >= urls.size()) {
+            broadcastState(false, "All saved streams failed to start.");
+            updateNotification("All streams failed", currentUrl);
+            stopSelf();
+            return;
+        }
+
+        String nextUrl = urlManager.getNextUrl();
+        if (nextUrl == null || nextUrl.equals(currentUrl)) {
+            broadcastState(false, "No different backup stream is available.");
+            updateNotification("No backup stream", currentUrl);
+            stopSelf();
+            return;
+        }
+
+        playbackRequestId++;
+        currentUrl = nextUrl;
+        broadcastState(false, null, reason + ". Trying another stream");
+        updateNotification("Trying backup stream", nextUrl);
+        startPlayback(nextUrl, playbackRequestId);
+    }
+
+    private void releaseMediaPlayerOnly() {
+        if (mediaPlayer != null) {
+            try {
+                if (mediaPlayer.isPlaying()) mediaPlayer.stop();
+                mediaPlayer.reset();
+                mediaPlayer.release();
+            } catch (Exception e) {
+                Log.e(TAG, "Error releasing player", e);
+            }
+            mediaPlayer = null;
+        }
+        isPlaying = false;
+    }
+
+    private void cancelStreamWatchdog() {
+        if (handler != null && streamStartTimeout != null) {
+            handler.removeCallbacks(streamStartTimeout);
+            streamStartTimeout = null;
+        }
+    }
+
+    private void speakIntro(int requestId) {
+        if (textToSpeech == null) return;
+
+        String message = "Welcome to Bathroom Audio Player. "
+                + "Please remember to flush the toilet after use. "
+                + "Now music is playing in 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0.";
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            Bundle params = new Bundle();
+            textToSpeech.speak(message, TextToSpeech.QUEUE_FLUSH, params, INTRO_UTTERANCE_ID);
+        } else {
+            //noinspection deprecation
+            textToSpeech.speak(message, TextToSpeech.QUEUE_FLUSH, null);
+            handler.postDelayed(() -> {
+                if (requestId != playbackRequestId) return;
+                shutdownTextToSpeech();
+                startPlayback(currentUrl, requestId);
+            }, ANNOUNCEMENT_FALLBACK_MS);
+        }
+    }
+
+    private void shutdownTextToSpeech() {
+        if (textToSpeech != null) {
+            try {
+                textToSpeech.stop();
+                textToSpeech.shutdown();
+            } catch (Exception e) {
+                Log.e(TAG, "Error shutting down TextToSpeech", e);
+            }
+            textToSpeech = null;
+        }
     }
 
     // ── Locks ─────────────────────────────────────────────────────────────────
@@ -220,10 +408,15 @@ public class RadioService extends Service {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void broadcastState(boolean playing, String error) {
+        broadcastState(playing, error, null);
+    }
+
+    private void broadcastState(boolean playing, String error, String status) {
         Intent i = new Intent(BROADCAST_STATE);
         i.putExtra(EXTRA_PLAYING, playing);
         i.putExtra(EXTRA_URL_NOW, currentUrl != null ? currentUrl : "");
         if (error != null) i.putExtra(EXTRA_ERROR, error);
+        if (status != null) i.putExtra(EXTRA_STATUS, status);
         sendBroadcast(i);
     }
 

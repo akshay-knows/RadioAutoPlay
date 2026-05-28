@@ -58,9 +58,10 @@ public class MainActivity extends AppCompatActivity {
             boolean playing = intent.getBooleanExtra(RadioService.EXTRA_PLAYING, false);
             String  url     = intent.getStringExtra(RadioService.EXTRA_URL_NOW);
             String  error   = intent.getStringExtra(RadioService.EXTRA_ERROR);
+            String  status  = intent.getStringExtra(RadioService.EXTRA_STATUS);
 
-            serviceRunning = playing;
-            updatePlaybackUI(playing, url, error);
+            serviceRunning = playing || status != null;
+            updatePlaybackUI(playing, url, error, status);
         }
     };
 
@@ -231,7 +232,7 @@ public class MainActivity extends AppCompatActivity {
             startService(i);
         }
         serviceRunning = true;
-        updatePlaybackUI(true, url, null);
+        updatePlaybackUI(false, url, null, "Starting");
     }
 
     private void stopService() {
@@ -239,17 +240,27 @@ public class MainActivity extends AppCompatActivity {
         i.setAction(RadioService.ACTION_STOP);
         startService(i);
         serviceRunning = false;
-        updatePlaybackUI(false, null, null);
+        updatePlaybackUI(false, null, null, null);
     }
 
     // ── UI helpers ────────────────────────────────────────────────────────────
 
     private void updatePlaybackUI(boolean playing, String url, String error) {
+        updatePlaybackUI(playing, url, error, null);
+    }
+
+    private void updatePlaybackUI(boolean playing, String url, String error, String status) {
         if (playing) {
             tvStatus.setText("● LIVE");
             tvStatus.setTextColor(getResources().getColor(R.color.playing_green));
             btnPlayStop.setText("■  Stop");
             tvCurrentUrl.setText(url != null ? url : "");
+            tvCurrentUrl.setVisibility(View.VISIBLE);
+        } else if (status != null) {
+            tvStatus.setText("● Starting");
+            tvStatus.setTextColor(getResources().getColor(R.color.accent));
+            btnPlayStop.setText("■  Stop");
+            tvCurrentUrl.setText(url != null && !url.isEmpty() ? status + "\n" + url : status);
             tvCurrentUrl.setVisibility(View.VISIBLE);
         } else {
             tvStatus.setText(error != null ? "⚠ Error" : "● Idle");

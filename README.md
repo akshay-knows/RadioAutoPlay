@@ -12,6 +12,8 @@ An Android app that **automatically starts playing a radio/audio stream when you
 | **Auto-stop on unplug** | Detects `ACTION_POWER_DISCONNECTED` and stops cleanly |
 | **Shuffle mode** | Picks a random saved stream every time you plug in |
 | **Sequential mode** | Cycles through your streams in order |
+| **Bathroom welcome announcement** | Speaks a welcome, flush reminder, and 10-second countdown before music starts |
+| **Stream failover watchdog** | If a stream errors or does not start within 1 minute, the app automatically tries another saved stream |
 | **Manage stream URLs** | Add, play, or remove any number of stream URLs |
 | **No hardcoded links** | All URLs are stored in SharedPreferences; fully user-configurable |
 | **Foreground service** | Keeps playing with screen off; shows a persistent notification |
@@ -97,7 +99,13 @@ ChargerReceiver.onReceive(ACTION_POWER_CONNECTED)
       │
       ▼
 RadioService starts as a ForegroundService
-MediaPlayer.prepareAsync() → MediaPlayer.start()
+TextToSpeech welcome/countdown plays
+      │
+      ▼
+MediaPlayer.prepareAsync()
+      │
+      ├── starts within 1 minute → MediaPlayer.start()
+      └── fails or times out      → try another saved stream
       │
       ▼
 Charger unplugged → ChargerReceiver sends STOP → RadioService releases MediaPlayer
