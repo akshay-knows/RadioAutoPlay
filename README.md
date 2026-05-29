@@ -8,11 +8,11 @@ An Android app that **automatically starts playing a radio/audio stream when you
 
 | Feature | Details |
 |---|---|
-| **Auto-play on charge** | Detects `ACTION_POWER_CONNECTED` and starts the stream instantly |
+| **Auto-play on charge** | Detects `ACTION_POWER_CONNECTED` and starts the bathroom audio sequence |
 | **Auto-stop on unplug** | Detects `ACTION_POWER_DISCONNECTED` and stops cleanly |
 | **Shuffle mode** | Picks a random saved stream every time you plug in |
 | **Sequential mode** | Cycles through your streams in order |
-| **Bathroom welcome announcement** | Speaks a welcome, flush reminder, and 10-second countdown before music starts |
+| **Bathroom intro theme** | Waits 5 seconds, plays the bundled intro MP3, then starts the radio |
 | **Stream failover watchdog** | If a stream errors or does not start within 1 minute, the app automatically tries another saved stream |
 | **Manage stream URLs** | Add, play, or remove any number of stream URLs |
 | **No hardcoded links** | All URLs are stored in SharedPreferences; fully user-configurable |
@@ -61,7 +61,7 @@ The APK will be at `app/build/outputs/apk/debug/app-debug.apk`.
 1. Open the app  
 2. Paste your stream URL (e.g. `https://s6.yesstreaming.net/proxy/john1237?mp=/live`) into the input field  
 3. Tap **+ Add Stream**  
-4. Plug in your charger — playback starts automatically 🎶
+4. Plug in your charger — the app waits 5 seconds, plays the intro theme, then starts radio automatically 🎶
 
 ---
 
@@ -99,7 +99,10 @@ ChargerReceiver.onReceive(ACTION_POWER_CONNECTED)
       │
       ▼
 RadioService starts as a ForegroundService
-TextToSpeech welcome/countdown plays
+5-second quiet delay
+      │
+      ▼
+Bundled intro MP3 plays
       │
       ▼
 MediaPlayer.prepareAsync()
