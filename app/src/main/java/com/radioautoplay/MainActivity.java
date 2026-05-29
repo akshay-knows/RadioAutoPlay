@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.TextUtils;
@@ -24,6 +25,11 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
@@ -41,6 +47,11 @@ public class MainActivity extends AppCompatActivity {
     private RecyclerView rvUrls;
 
     private boolean serviceRunning = false;
+    private final ActivityResultLauncher<String[]> csvPickerLauncher =
+            registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+                if (uri != null) importCsv(uri);
+            });
+
     private final ActivityResultLauncher<String> notificationPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
                 if (!granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -145,6 +156,7 @@ public class MainActivity extends AppCompatActivity {
 
         // Add URL button
         findViewById(R.id.btn_add).setOnClickListener(v -> addUrl());
+        findViewById(R.id.btn_import_csv).setOnClickListener(v -> openCsvPicker());
 
         // Play / Stop button
         btnPlayStop.setOnClickListener(v -> {
@@ -198,6 +210,80 @@ public class MainActivity extends AppCompatActivity {
         etNewUrl.setError(null);
         refreshList();
         Toast.makeText(this, "Stream added ✓", Toast.LENGTH_SHORT).show();
+    }
+
+    private void openCsvPicker() {
+        csvPickerLauncher.launch(new String[] {
+                "text/*",
+                "text/csv",
+                "application/csv",
+                "application/vnd.ms-excel",
+                "application/octet-stream"
+        });
+    }
+
+    private void importCsv(Uri uri) {
+        try {
+            List<String> links = readStreamUrlsFromCsv(uri);
+            int added = urlManager.addUrls(links);
+            refreshList();
+
+            if (added > 0) {
+                Toast.makeText(this, "Imported " + added + " stream URL(s).", Toast.LENGTH_LONG).show();
+            } else if (links.isEmpty()) {
+                Toast.makeText(this, "No http:// or https:// stream links found in that CSV.", Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(this, "All links in that CSV were already saved.", Toast.LENGTH_LONG).show();
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "Could not import CSV: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private List<String> readStreamUrlsFromCsv(Uri uri) throws Exception {
+        List<String> links = new ArrayList<>();
+        try (InputStream inputStream = getContentResolver().openInputStream(uri);
+             BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                for (String cell : parseCsvLine(line)) {
+                    String value = cell.trim();
+                    if (isValidStreamUrl(value) && !links.contains(value)) {
+                        links.add(value);
+                    }
+                }
+            }
+        }
+        return links;
+    }
+
+    private List<String> parseCsvLine(String line) {
+        List<String> cells = new ArrayList<>();
+        StringBuilder cell = new StringBuilder();
+        boolean inQuotes = false;
+
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (c == '"') {
+                if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                    cell.append('"');
+                    i++;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (c == ',' && !inQuotes) {
+                cells.add(cell.toString());
+                cell.setLength(0);
+            } else {
+                cell.append(c);
+            }
+        }
+        cells.add(cell.toString());
+        return cells;
+    }
+
+    private boolean isValidStreamUrl(String value) {
+        return value.startsWith("http://") || value.startsWith("https://");
     }
 
     private void playIndex(int index) {

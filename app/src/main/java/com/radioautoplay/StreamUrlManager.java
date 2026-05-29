@@ -46,6 +46,26 @@ public class StreamUrlManager {
         }
     }
 
+    public int addUrls(List<String> urls) {
+        if (urls == null || urls.isEmpty()) return 0;
+
+        List<String> current = getUrls();
+        int added = 0;
+        for (String url : urls) {
+            if (url == null) continue;
+            url = url.trim();
+            if (!url.isEmpty() && !current.contains(url)) {
+                current.add(url);
+                added++;
+            }
+        }
+
+        if (added > 0) {
+            saveList(current);
+        }
+        return added;
+    }
+
     public void removeUrl(int index) {
         List<String> current = getUrls();
         if (index >= 0 && index < current.size()) {
