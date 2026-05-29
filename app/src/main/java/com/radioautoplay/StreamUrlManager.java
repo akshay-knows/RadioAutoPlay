@@ -2,6 +2,7 @@ package com.radioautoplay;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Build;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -24,8 +25,14 @@ public class StreamUrlManager {
     private final Random random = new Random();
 
     public StreamUrlManager(Context context) {
-        prefs = context.getApplicationContext()
-                       .getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        Context appContext = context.getApplicationContext();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            Context deviceContext = appContext.createDeviceProtectedStorageContext();
+            deviceContext.moveSharedPreferencesFrom(appContext, PREF_NAME);
+            prefs = deviceContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        } else {
+            prefs = appContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        }
     }
 
     // ── URL list ──────────────────────────────────────────────────────────────

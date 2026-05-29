@@ -10,6 +10,7 @@ An Android app that **automatically starts playing a radio/audio stream when you
 |---|---|
 | **Auto-play on charge** | Detects `ACTION_POWER_CONNECTED` and starts the bathroom audio sequence |
 | **Auto-stop on unplug** | Detects `ACTION_POWER_DISCONNECTED` and stops cleanly |
+| **Lock-screen charger monitor** | Runs a small foreground monitor so charger events keep working while the phone is locked |
 | **Shuffle mode** | Picks a random saved stream every time you plug in |
 | **Sequential mode** | Cycles through your streams in order |
 | **Bathroom intro theme** | Waits 5 seconds, plays the bundled intro MP3, then starts the radio |
@@ -63,6 +64,20 @@ The APK will be at `app/build/outputs/apk/debug/app-debug.apk`.
 2. Paste your stream URL (e.g. `https://s6.yesstreaming.net/proxy/john1237?mp=/live`) into the input field  
 3. Tap **+ Add Stream**  
 4. Plug in your charger — the app waits 5 seconds, plays the intro theme, then starts radio automatically 🎶
+
+### Keep autoplay reliable
+
+Open the app once after installing it. This starts the charger monitor notification, which keeps charger connect/disconnect detection alive while the phone is locked.
+
+After a reboot, the app restarts the charger monitor automatically using Android's boot broadcasts. Stream URLs are stored in device-protected storage on Android 7+, so the monitor can be ready even before the first unlock after boot.
+
+On some Android skins, also allow this app in battery/autostart settings:
+
+- Disable battery optimization for **Radio AutoPlay**
+- Allow **Auto start** / **Run in background**
+- Allow notifications, so Android can keep the foreground monitor alive
+
+Android 10+ usually blocks apps from visually opening their screen from the background or lock screen. The app is designed to play/stop audio in the background instead; tap the persistent notification if you want to open the screen.
 
 ### Import streams from Excel / CSV
 

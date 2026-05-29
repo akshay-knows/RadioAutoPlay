@@ -29,16 +29,27 @@
         <!-- Radio playback service (runs in foreground) -->
         <service
             android:name=".RadioService"
+            android:directBootAware="true"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- Keeps charger detection alive while app is backgrounded / locked -->
+        <service
+            android:name=".ChargerMonitorService"
+            android:directBootAware="true"
+            android:exported="false" />
 
         <!-- Charger plug/unplug receiver -->
         <receiver
             android:name=".ChargerReceiver"
+            android:directBootAware="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
                 <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
 

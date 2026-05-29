@@ -90,6 +90,7 @@ public class MainActivity extends AppCompatActivity {
         setupControls();
         refreshShuffleSwitch();
         requestNotificationPermissionIfNeeded();
+        ChargerMonitorService.start(this);
     }
 
     @Override
