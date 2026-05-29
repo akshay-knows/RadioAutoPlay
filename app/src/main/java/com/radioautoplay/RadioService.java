@@ -53,12 +53,14 @@ public class RadioService extends Service {
     private WifiManager.WifiLock  wifiLock;
     private StreamUrlManager urlManager;
     private Handler handler;
+    private AudioManager audioManager;
     private String currentUrl;
     private Runnable introStartDelay;
     private Runnable streamStartTimeout;
     private boolean isPlaying = false;
     private int failoverAttempts = 0;
     private int playbackRequestId = 0;
+    private final AudioManager.OnAudioFocusChangeListener audioFocusChangeListener = focusChange -> { };
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -67,6 +69,7 @@ public class RadioService extends Service {
         super.onCreate();
         handler = new Handler(Looper.getMainLooper());
         urlManager = new StreamUrlManager(this);
+        audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
         createNotificationChannel();
         acquireLocks();
     }
@@ -156,6 +159,7 @@ public class RadioService extends Service {
 
             updateNotification("Playing intro theme", url);
             broadcastState(false, null, "Playing intro theme");
+            requestAudioFocus();
             introPlayer.prepare();
             introPlayer.start();
 
@@ -177,21 +181,10 @@ public class RadioService extends Service {
             mediaPlayer = new MediaPlayer();
 
             setPlayerAudioMode(mediaPlayer);
-
-            mediaPlayer.setDataSource(url);
-            mediaPlayer.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
-            mediaPlayer.prepareAsync(); // non-blocking
-            streamStartTimeout = () -> {
-                if (requestId == playbackRequestId && mediaPlayer != null && !isPlaying) {
-                    Log.w(TAG, "Stream did not start within one minute: " + currentUrl);
-                    switchToAnotherStream("Stream did not start in 1 minute");
-                }
-            };
-            handler.postDelayed(streamStartTimeout, STREAM_START_TIMEOUT_MS);
-
             mediaPlayer.setOnPreparedListener(mp -> {
                 if (requestId != playbackRequestId) return;
                 cancelStreamWatchdog();
+                requestAudioFocus();
                 mp.start();
                 isPlaying = true;
                 broadcastState(true, null);
@@ -212,6 +205,16 @@ public class RadioService extends Service {
                 Log.d(TAG, "MediaPlayer info: " + what);
                 return false;
             });
+            mediaPlayer.setDataSource(url);
+            mediaPlayer.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
+            mediaPlayer.prepareAsync(); // non-blocking
+            streamStartTimeout = () -> {
+                if (requestId == playbackRequestId && mediaPlayer != null && !isPlaying) {
+                    Log.w(TAG, "Stream did not start within one minute: " + currentUrl);
+                    switchToAnotherStream("Stream did not start in 1 minute");
+                }
+            };
+            handler.postDelayed(streamStartTimeout, STREAM_START_TIMEOUT_MS);
 
             // Show "connecting…" notification immediately
             startForeground(NOTIF_ID, buildNotification("Connecting", url));
@@ -245,6 +248,7 @@ public class RadioService extends Service {
         if (broadcastIdle) {
             broadcastState(false, null);
         }
+        abandonAudioFocus();
     }
 
     private void switchToAnotherStream(String reason) {
@@ -335,6 +339,22 @@ public class RadioService extends Service {
             //noinspection deprecation
             player.setAudioStreamType(AudioManager.STREAM_MUSIC);
         }
+    }
+
+    private void requestAudioFocus() {
+        if (audioManager == null) return;
+        //noinspection deprecation
+        audioManager.requestAudioFocus(
+                audioFocusChangeListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+        );
+    }
+
+    private void abandonAudioFocus() {
+        if (audioManager == null) return;
+        //noinspection deprecation
+        audioManager.abandonAudioFocus(audioFocusChangeListener);
     }
 
     // ── Locks ─────────────────────────────────────────────────────────────────

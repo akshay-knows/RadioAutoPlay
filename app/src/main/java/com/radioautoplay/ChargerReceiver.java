@@ -92,11 +92,7 @@ public class ChargerReceiver extends BroadcastReceiver {
         service.setAction(RadioService.ACTION_STOP);
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(service);
-            } else {
-                context.startService(service);
-            }
+            context.startService(service);
         } catch (Exception e) {
             Log.e(TAG, "Could not send stop command to radio service", e);
             context.stopService(service);
