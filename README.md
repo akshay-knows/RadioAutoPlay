@@ -17,6 +17,7 @@ An Android app that **automatically starts playing a radio/audio stream when you
 | **Stream failover watchdog** | If a stream errors or does not start within 1 minute, the app automatically tries another saved stream |
 | **Manage stream URLs** | Add, play, or remove any number of stream URLs |
 | **CSV import** | Import many stream links from a CSV file exported from Excel or Google Sheets |
+| **Preloaded streams** | Starts with 23 built-in radio/news/music stream URLs from the provided workbook |
 | **No hardcoded links** | All URLs are stored in SharedPreferences; fully user-configurable |
 | **Foreground service** | Keeps playing with screen off; shows a persistent notification |
 | **Light & lean** | No third-party streaming SDK; uses Android's built-in `MediaPlayer` |
@@ -61,8 +62,8 @@ The APK will be at `app/build/outputs/apk/debug/app-debug.apk`.
 ### Add your first stream
 
 1. Open the app  
-2. Paste your stream URL (e.g. `https://s6.yesstreaming.net/proxy/john1237?mp=/live`) into the input field  
-3. Tap **+ Add Stream**  
+2. Use the preloaded streams, or paste your own stream URL into the input field
+3. Tap **+ Add Stream** if adding a custom stream
 4. Plug in your charger — the app waits 5 seconds, plays the intro theme, then starts radio automatically 🎶
 
 ### Keep autoplay reliable
