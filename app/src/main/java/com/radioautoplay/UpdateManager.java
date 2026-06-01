@@ -1,6 +1,9 @@
 package com.radioautoplay;
 
 import android.app.Activity;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -15,6 +18,7 @@ import android.provider.Settings;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 
 import org.json.JSONArray;
@@ -31,6 +35,8 @@ public class UpdateManager {
     private static final String LATEST_RELEASE_API =
             "https://api.github.com/repos/akshay-knows/RadioAutoPlay/releases/latest";
     private static final String APK_MIME_TYPE = "application/vnd.android.package-archive";
+    private static final String UPDATE_CHANNEL_ID = "app_update_channel";
+    private static final int UPDATE_NOTIFICATION_ID = 1042;
 
     private final Activity activity;
     private long activeDownloadId = -1L;
@@ -50,6 +56,7 @@ public class UpdateManager {
 
     public UpdateManager(Activity activity) {
         this.activity = activity;
+        ensureUpdateChannel();
     }
 
     public void register() {
@@ -93,6 +100,7 @@ public class UpdateManager {
             }
             return;
         }
+        showUpdateNotification(update);
 
         new AlertDialog.Builder(activity)
                 .setTitle("Update available")
@@ -102,6 +110,46 @@ public class UpdateManager {
                 .setPositiveButton("Update", (dialog, which) -> startUpdate(update))
                 .setNegativeButton("Later", null)
                 .show();
+    }
+
+    private void ensureUpdateChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        NotificationManager nm =
+                (NotificationManager) activity.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        NotificationChannel channel = new NotificationChannel(
+                UPDATE_CHANNEL_ID,
+                "App Updates",
+                NotificationManager.IMPORTANCE_DEFAULT
+        );
+        channel.setDescription("Alerts when a newer Radio AutoPlay version is available");
+        nm.createNotificationChannel(channel);
+    }
+
+    private void showUpdateNotification(UpdateInfo update) {
+        NotificationManager nm =
+                (NotificationManager) activity.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+
+        Intent openApp = new Intent(activity, MainActivity.class);
+        openApp.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                : PendingIntent.FLAG_UPDATE_CURRENT;
+        PendingIntent pi = PendingIntent.getActivity(activity, 42, openApp, flags);
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(activity, UPDATE_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setContentTitle("Update available: v" + update.versionName)
+                .setContentText("Tap to open Radio AutoPlay and install the update.")
+                .setStyle(new NotificationCompat.BigTextStyle()
+                        .bigText("A newer version (v" + update.versionName
+                                + ") is available. Open the app and tap Update to install."))
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .setContentIntent(pi);
+
+        nm.notify(UPDATE_NOTIFICATION_ID, builder.build());
     }
 
     private UpdateInfo fetchLatestUpdate() throws Exception {

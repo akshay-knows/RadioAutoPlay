@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Radio AutoPlay</string>
-    <string name="changelog_v1_1">v1.5\n- Web playback stability improved with real media-state verification and health checks\n- All added/imported links are treated as webpage station links\n- Radio name announcement added from station title (without speaking raw links)\n- Time announcements now duck and restore music volume\n- Refreshed visual theme and cleaner always-on Web Player mode</string>
+    <string name="changelog_v1_1">v1.6\n- Update-available notification added for remote phones\n- Web playback stability and diagnostics monitoring retained\n- All links continue to run through webpage mode\n- Announcements keep duck-and-restore behavior</string>
 </resources>
