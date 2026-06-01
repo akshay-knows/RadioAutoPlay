@@ -11,6 +11,7 @@ import android.content.res.AssetFileDescriptor;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Handler;
@@ -21,8 +22,18 @@ import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 
+import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Foreground service that manages MediaPlayer for radio streaming.
@@ -177,6 +188,31 @@ public class RadioService extends Service {
         currentUrl = url;
         Log.d(TAG, "Starting playback: " + url);
 
+        streamStartTimeout = () -> {
+            if (requestId == playbackRequestId && !isPlaying) {
+                Log.w(TAG, "Stream did not start within one minute: " + currentUrl);
+                switchToAnotherStream("Stream did not start in 1 minute");
+            }
+        };
+        handler.postDelayed(streamStartTimeout, STREAM_START_TIMEOUT_MS);
+        startForeground(NOTIF_ID, buildNotification("Resolving stream", url));
+        broadcastState(false, null, "Resolving stream");
+
+        new Thread(() -> {
+            StreamSource source = resolveStreamSource(url);
+            handler.post(() -> {
+                if (requestId == playbackRequestId && !isPlaying) {
+                    openResolvedPlayback(source, requestId);
+                }
+            });
+        }, "StreamResolver").start();
+    }
+
+    private void openResolvedPlayback(StreamSource source, int requestId) {
+        releaseMediaPlayerOnly();
+        if (requestId != playbackRequestId) return;
+
+        currentUrl = source.displayUrl;
         try {
             mediaPlayer = new MediaPlayer();
 
@@ -205,19 +241,12 @@ public class RadioService extends Service {
                 Log.d(TAG, "MediaPlayer info: " + what);
                 return false;
             });
-            mediaPlayer.setDataSource(url);
+            mediaPlayer.setDataSource(getApplicationContext(), Uri.parse(source.playUrl), source.headers);
             mediaPlayer.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
             mediaPlayer.prepareAsync(); // non-blocking
-            streamStartTimeout = () -> {
-                if (requestId == playbackRequestId && mediaPlayer != null && !isPlaying) {
-                    Log.w(TAG, "Stream did not start within one minute: " + currentUrl);
-                    switchToAnotherStream("Stream did not start in 1 minute");
-                }
-            };
-            handler.postDelayed(streamStartTimeout, STREAM_START_TIMEOUT_MS);
 
             // Show "connecting…" notification immediately
-            startForeground(NOTIF_ID, buildNotification("Connecting", url));
+            startForeground(NOTIF_ID, buildNotification("Connecting", source.displayUrl));
             broadcastState(false, null, "Connecting to music");
 
         } catch (Exception e) {
@@ -284,6 +313,87 @@ public class RadioService extends Service {
         broadcastState(false, null, reason + ". Trying another stream");
         updateNotification("Trying backup stream", nextUrl);
         startPlayback(nextUrl, playbackRequestId);
+    }
+
+    private StreamSource resolveStreamSource(String url) {
+        Map<String, String> playerHeaders = createPlayerHeaders();
+        HttpURLConnection connection = null;
+
+        try {
+            connection = (HttpURLConnection) new URL(url).openConnection();
+            connection.setConnectTimeout(12_000);
+            connection.setReadTimeout(12_000);
+            connection.setInstanceFollowRedirects(true);
+            connection.setRequestProperty("User-Agent", playerHeaders.get("User-Agent"));
+            connection.setRequestProperty("Accept", playerHeaders.get("Accept"));
+            connection.setRequestProperty("Icy-MetaData", "1");
+
+            String contentType = connection.getContentType();
+            String finalUrl = connection.getURL().toString();
+            if (!isHtmlContent(contentType)) {
+                return new StreamSource(finalUrl, finalUrl, playerHeaders);
+            }
+
+            String html = readSmallTextResponse(connection.getInputStream());
+            String sourceUrl = extractMediaSourceUrl(finalUrl, html);
+            if (sourceUrl != null) {
+                Log.d(TAG, "Resolved HTML player page to media source: " + sourceUrl);
+                return new StreamSource(sourceUrl, sourceUrl, playerHeaders);
+            }
+
+            Log.w(TAG, "HTML page did not expose a media source. Retrying URL with audio headers.");
+            return new StreamSource(finalUrl, finalUrl, playerHeaders);
+        } catch (Exception e) {
+            Log.w(TAG, "Could not pre-resolve stream URL. Trying direct playback.", e);
+            return new StreamSource(url, url, playerHeaders);
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    private Map<String, String> createPlayerHeaders() {
+        Map<String, String> headers = new LinkedHashMap<>();
+        headers.put("User-Agent", "Mozilla/5.0 (Linux; Android 13) RadioAutoPlay/1.0");
+        headers.put("Accept", "audio/mpeg,audio/aac,audio/ogg,audio/*;q=0.9,video/*;q=0.4,*/*;q=0.1");
+        headers.put("Icy-MetaData", "1");
+        return headers;
+    }
+
+    private boolean isHtmlContent(String contentType) {
+        return contentType != null && contentType.toLowerCase(Locale.US).contains("html");
+    }
+
+    private String readSmallTextResponse(InputStream inputStream) throws IOException {
+        try (BufferedInputStream in = new BufferedInputStream(inputStream);
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[4096];
+            int total = 0;
+            int read;
+            while ((read = in.read(buffer)) != -1 && total < 65536) {
+                int allowed = Math.min(read, 65536 - total);
+                out.write(buffer, 0, allowed);
+                total += allowed;
+            }
+            return out.toString("UTF-8");
+        }
+    }
+
+    private String extractMediaSourceUrl(String baseUrl, String html) {
+        if (html == null || html.isEmpty()) return null;
+
+        Pattern mediaSourcePattern = Pattern.compile(
+                "(?i)<(?:audio|video|source)[^>]+src\\s*=\\s*['\"]([^'\"]+)['\"]");
+        Matcher matcher = mediaSourcePattern.matcher(html);
+        if (!matcher.find()) return null;
+
+        try {
+            return new URL(new URL(baseUrl), matcher.group(1)).toString();
+        } catch (Exception e) {
+            Log.w(TAG, "Could not resolve media source URL", e);
+            return matcher.group(1);
+        }
     }
 
     private void releaseMediaPlayerOnly() {
@@ -439,5 +549,17 @@ public class RadioService extends Service {
     private String shortenUrl(String url) {
         if (url == null) return "";
         return url.length() > 50 ? url.substring(0, 47) + "…" : url;
+    }
+
+    private static class StreamSource {
+        final String playUrl;
+        final String displayUrl;
+        final Map<String, String> headers;
+
+        StreamSource(String playUrl, String displayUrl, Map<String, String> headers) {
+            this.playUrl = playUrl;
+            this.displayUrl = displayUrl;
+            this.headers = headers;
+        }
     }
 }
