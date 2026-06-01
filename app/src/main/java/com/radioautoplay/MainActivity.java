@@ -37,6 +37,7 @@ public class MainActivity extends AppCompatActivity {
     private StreamUrlManager urlManager;
     private IntroSoundManager introSoundManager;
     private UpdateManager updateManager;
+    private DiagnosticsLogger diagnosticsLogger;
     private UrlAdapter        adapter;
     private List<String>      urlList;
 
@@ -45,7 +46,6 @@ public class MainActivity extends AppCompatActivity {
     private TextView   tvCurrentUrl;
     private Button     btnPlayStop;
     private Switch     switchShuffle;
-    private Switch     switchWebStations;
     private EditText   etNewUrl;
     private RecyclerView rvUrls;
 
@@ -93,12 +93,12 @@ public class MainActivity extends AppCompatActivity {
         urlManager = new StreamUrlManager(this);
         introSoundManager = new IntroSoundManager(this);
         updateManager = new UpdateManager(this);
+        diagnosticsLogger = new DiagnosticsLogger(this);
 
         bindViews();
         setupRecyclerView();
         setupControls();
         refreshShuffleSwitch();
-        refreshWebStationsSwitch();
         requestNotificationPermissionIfNeeded();
         ChargerMonitorService.start(this);
         updateManager.register();
@@ -133,7 +133,6 @@ public class MainActivity extends AppCompatActivity {
         tvCurrentUrl  = findViewById(R.id.tv_current_url);
         btnPlayStop   = findViewById(R.id.btn_play_stop);
         switchShuffle = findViewById(R.id.switch_shuffle);
-        switchWebStations = findViewById(R.id.switch_web_stations);
         etNewUrl      = findViewById(R.id.et_new_url);
         rvUrls        = findViewById(R.id.rv_urls);
         TextView version = findViewById(R.id.tv_app_version);
@@ -182,6 +181,10 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btn_add_intro).setOnClickListener(v -> openIntroSoundPicker());
         findViewById(R.id.btn_clear_intro).setOnClickListener(v -> clearIntroSounds());
         findViewById(R.id.btn_check_updates).setOnClickListener(v -> updateManager.checkForUpdates(true));
+        findViewById(R.id.btn_show_log_path).setOnClickListener(v -> {
+            String path = diagnosticsLogger.getLogPath();
+            Toast.makeText(this, "Diagnostics log: " + path, Toast.LENGTH_LONG).show();
+        });
 
         // Play / Stop button
         btnPlayStop.setOnClickListener(v -> {
@@ -205,21 +208,10 @@ public class MainActivity extends AppCompatActivity {
                     Toast.LENGTH_SHORT).show();
         });
 
-        switchWebStations.setOnCheckedChangeListener((btn, checked) -> {
-            urlManager.setWebStationsDefault(checked);
-            Toast.makeText(this,
-                    checked ? "Webpage stations will be preferred on charger connect"
-                            : "Direct in-app streams will be preferred on charger connect",
-                    Toast.LENGTH_SHORT).show();
-        });
     }
 
     private void refreshShuffleSwitch() {
         switchShuffle.setChecked(urlManager.isShuffleEnabled());
-    }
-
-    private void refreshWebStationsSwitch() {
-        switchWebStations.setChecked(urlManager.isWebStationsDefault());
     }
 
     private void requestNotificationPermissionIfNeeded() {
@@ -246,7 +238,7 @@ public class MainActivity extends AppCompatActivity {
         etNewUrl.setText("");
         etNewUrl.setError(null);
         refreshList();
-        Toast.makeText(this, "Stream added ✓", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Web station link added ✓", Toast.LENGTH_SHORT).show();
     }
 
     private void openCsvPicker() {

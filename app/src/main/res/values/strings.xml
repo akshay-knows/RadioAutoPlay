@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Radio AutoPlay</string>
-    <string name="changelog_v1_1">v1.4\n- Removed the music-start voice announcement so playback is not interrupted\n- In-app updater retained for future APK installs\n- Stable app signing keeps future APK updates compatible\n- Webpage station mode and 17-second failover retained\n- Quiet hours from 12:00 AM to 6:00 AM</string>
+    <string name="changelog_v1_1">v1.5\n- Web playback stability improved with real media-state verification and health checks\n- All added/imported links are treated as webpage station links\n- Radio name announcement added from station title (without speaking raw links)\n- Time announcements now duck and restore music volume\n- Refreshed visual theme and cleaner always-on Web Player mode</string>
 </resources>

@@ -119,29 +119,23 @@ public class StreamUrlManager {
     }
 
     public List<String> getAllPlaybackUrls() {
-        List<String> urls = getUrls();
-        for (String webUrl : getWebUrls()) {
-            if (!urls.contains(webUrl)) {
-                urls.add(webUrl);
-            }
-        }
-        return urls;
+        return getWebUrls();
     }
 
     public void addUrl(String url) {
         if (url == null || url.trim().isEmpty()) return;
         url = url.trim();
-        List<String> current = getUrls();
+        List<String> current = getWebUrls();
         if (!current.contains(url)) {
             current.add(url);
-            saveList(current);
+            saveWebList(current);
         }
     }
 
     public int addUrls(List<String> urls) {
         if (urls == null || urls.isEmpty()) return 0;
 
-        List<String> current = getUrls();
+        List<String> current = getWebUrls();
         int added = 0;
         for (String url : urls) {
             if (url == null) continue;
@@ -153,16 +147,16 @@ public class StreamUrlManager {
         }
 
         if (added > 0) {
-            saveList(current);
+            saveWebList(current);
         }
         return added;
     }
 
     public void removeUrl(int index) {
-        List<String> current = getUrls();
+        List<String> current = getWebUrls();
         if (index >= 0 && index < current.size()) {
             current.remove(index);
-            saveList(current);
+            saveWebList(current);
             // Adjust active index if needed
             int active = getActiveIndex();
             if (active >= current.size()) {
@@ -173,10 +167,10 @@ public class StreamUrlManager {
 
     public void updateUrl(int index, String newUrl) {
         if (newUrl == null || newUrl.trim().isEmpty()) return;
-        List<String> current = getUrls();
+        List<String> current = getWebUrls();
         if (index >= 0 && index < current.size()) {
             current.set(index, newUrl.trim());
-            saveList(current);
+            saveWebList(current);
         }
     }
 
@@ -184,6 +178,11 @@ public class StreamUrlManager {
         // Preserve order via LinkedHashSet
         LinkedHashSet<String> set = new LinkedHashSet<>(list);
         prefs.edit().putStringSet(KEY_URLS, set).apply();
+    }
+
+    private void saveWebList(List<String> list) {
+        LinkedHashSet<String> set = new LinkedHashSet<>(list);
+        prefs.edit().putStringSet(KEY_WEB_URLS, set).apply();
     }
 
     // ── Active URL ────────────────────────────────────────────────────────────
@@ -261,12 +260,11 @@ public class StreamUrlManager {
     }
 
     public List<String> getAutoPlaybackUrls() {
-        List<String> preferred = isWebStationsDefault() ? getWebUrls() : getUrls();
+        List<String> preferred = getWebUrls();
         List<String> available = filterTemporarilyFailed(preferred);
         if (!available.isEmpty()) return available;
 
-        available = filterTemporarilyFailed(getAllPlaybackUrls());
-        return available.isEmpty() ? getAllPlaybackUrls() : available;
+        return available;
     }
 
     private List<String> filterTemporarilyFailed(List<String> urls) {
