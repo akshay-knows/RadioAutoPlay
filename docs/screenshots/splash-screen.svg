@@ -1,0 +1,20 @@
+<svg width="420" height="860" viewBox="0 0 420 860" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Radio AutoPlay splash screen preview">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="36%" r="45%">
+      <stop offset="0" stop-color="#7C4DFF" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#121212" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="420" height="860" rx="42" fill="#08080d"/>
+  <rect x="16" y="16" width="388" height="828" rx="32" fill="#121212"/>
+  <circle cx="210" cy="310" r="170" fill="url(#glow)"/>
+  <circle cx="210" cy="300" r="64" fill="#1E1E2E" stroke="#7C4DFF" stroke-width="4"/>
+  <path d="M190 276v48l46-24z" fill="#00E676"/>
+  <path d="M176 260c-22 22-22 58 0 80" fill="none" stroke="#7C4DFF" stroke-width="8" stroke-linecap="round"/>
+  <path d="M244 260c22 22 22 58 0 80" fill="none" stroke="#7C4DFF" stroke-width="8" stroke-linecap="round"/>
+  <text x="210" y="414" fill="#eeeeee" font-family="Arial, sans-serif" font-size="28" font-weight="700" text-anchor="middle">Radio AutoPlay</text>
+  <text x="210" y="444" fill="#888888" font-family="Arial, sans-serif" font-size="14" text-anchor="middle">v1.7</text>
+  <rect x="174" y="482" width="72" height="8" rx="4" fill="#1E1E2E"/>
+  <rect x="174" y="482" width="42" height="8" rx="4" fill="#7C4DFF"/>
+  <text x="210" y="540" fill="#888888" font-family="Arial, sans-serif" font-size="13" text-anchor="middle">Ready for charger autoplay</text>
+</svg>

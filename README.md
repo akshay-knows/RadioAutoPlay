@@ -1,200 +1,193 @@
-# 📻 Radio AutoPlay
+# Radio AutoPlay
 
-An Android app that **automatically starts playing a radio/audio stream when your charger is plugged in** and stops when it's unplugged — no interaction required.
+An Android app for turning a spare phone into a charger-triggered radio player.
 
----
+Plug the phone into power and Radio AutoPlay waits 10 seconds, plays a random intro sound, opens a saved webpage radio station, and starts music automatically. Unplug power and it stops cleanly.
 
-## ✨ Features
+It was built for a simple but fun setup: a spare Android phone, speakers, and a bathroom light switch or charger connection that makes the room come alive when power turns on.
 
-| Feature | Details |
+[![Build APK](https://github.com/akshay-knows/RadioAutoPlay/actions/workflows/build-apk.yml/badge.svg)](https://github.com/akshay-knows/RadioAutoPlay/actions/workflows/build-apk.yml)
+[![Release APK](https://github.com/akshay-knows/RadioAutoPlay/actions/workflows/release-apk.yml/badge.svg)](https://github.com/akshay-knows/RadioAutoPlay/actions/workflows/release-apk.yml)
+[![Latest Release](https://img.shields.io/github/v/release/akshay-knows/RadioAutoPlay?label=latest)](https://github.com/akshay-knows/RadioAutoPlay/releases/latest)
+
+## Preview
+
+<p align="center">
+  <img src="docs/screenshots/main-screen.svg" alt="Radio AutoPlay main screen preview" width="280" />
+  <img src="docs/screenshots/splash-screen.svg" alt="Radio AutoPlay splash screen preview" width="280" />
+</p>
+
+## Highlights
+
+| Feature | What it does |
 |---|---|
-| **Auto-play on charge** | Detects `ACTION_POWER_CONNECTED` and starts the bathroom audio sequence |
-| **Auto-stop on unplug** | Detects `ACTION_POWER_DISCONNECTED` and stops cleanly |
-| **Lock-screen charger monitor** | Runs a small foreground monitor so charger events keep working while the phone is locked |
-| **Animated splash screen** | Shows a quick animated launch screen before the main controls |
-| **Shuffle mode** | Picks a random saved stream every time you plug in |
-| **Sequential mode** | Cycles through your streams in order |
-| **Playback source switch** | Choose whether charger autoplay prefers direct in-app streams or webpage station players |
-| **Stable APK updates** | Debug and release builds use the same bundled project signing key from v1.2 onward |
-| **In-app updater** | Checks GitHub Releases, prompts inside the app, downloads the APK, and opens Android's installer |
-| **Multiple intro sounds** | Bundled startup sounds and optional custom audio are chosen randomly while the station starts buffering |
-| **Voice announcements** | Announces time every hour/half-hour, stream failures, network loss, low battery, and music start without reading link names |
-| **Quiet hours** | Automatically refuses or stops playback from 12:00 AM to 6:00 AM |
-| **Stream failover watchdog** | If a stream errors or does not start within 17 seconds, the app automatically tries another saved stream |
-| **Self-healing stations** | Failed stations are skipped for 30 minutes, then automatically retried later |
-| **HTML player link support** | If a station returns a simple browser player page, the app extracts `<audio>`, `<video>`, or `<source>` media URLs and retries with audio-friendly headers |
-| **Manage stream URLs** | Add, play, or remove any number of stream URLs |
-| **CSV import** | Import many stream links from a CSV file exported from Excel or Google Sheets |
-| **Preloaded streams** | Starts with 23 built-in radio/news/music stream URLs from the provided workbook |
-| **Web station pool** | Includes additional online radio station webpages that can be played through the WebView fallback |
-| **No hardcoded links** | All URLs are stored in SharedPreferences; fully user-configurable |
-| **Foreground service** | Keeps playing with screen off; shows a persistent notification |
-| **Light & lean** | No third-party streaming SDK; uses Android's built-in `MediaPlayer` |
-| **Connecting loop** | Plays the bundled `get_connected` audio in a loop after the intro until the stream is ready |
+| Charger autoplay | Starts playback when Android reports charger/power connected |
+| Auto stop | Stops playback when charger/power is disconnected |
+| 10-second start delay | Gives the phone/network a moment before the intro and station start |
+| Random intro sounds | Plays one bundled or custom intro sound before the station |
+| Webpage station mode | Opens saved radio webpages in a hidden WebView, similar to a browser |
+| OnlineRadioBox support | Clicks/starts OnlineRadioBox-style webpage players automatically |
+| Volume normalizer | Keeps playback at a safer consistent level across loud and quiet stations |
+| Quiet hours toggle | Optional silent window from 12:00 AM to 6:00 AM |
+| Shuffle mode | Picks a random station every time the charger connects |
+| Foreground service | Keeps playback alive with screen off and phone locked |
+| Offline fallback audio | Plays bundled backup audio if the network disconnects |
+| Diagnostics log | Writes playback events and failures to a local log file |
+| In-app updater | Checks GitHub Releases, downloads the APK, and opens Android installer |
+| Versioned APK archive | Release workflow saves APKs under `apk-releases/<version>/` |
 
----
+## Latest Version
 
-## 📱 Compatibility
+Current app version: **v1.7**
 
-- **Minimum SDK:** API 19 (Android 4.4 KitKat)
-- **Target SDK:** API 33 (Android 13)
-- Works on Android versions from 4.4 to modern Android releases
+Download the latest APK from [GitHub Releases](https://github.com/akshay-knows/RadioAutoPlay/releases/latest).
 
----
+The v1.7 APK is also archived here:
 
-## 🏗 Architecture
-
-```
-app/
-├── ChargerReceiver.java    # Detects plug/unplug via BroadcastReceiver
-├── RadioService.java       # Foreground service — MediaPlayer lifecycle
-├── StreamUrlManager.java   # SharedPreferences CRUD for stream URLs
-├── UrlAdapter.java         # RecyclerView adapter for the URL list
-└── MainActivity.java       # UI — add/remove URLs, manual play/stop, shuffle toggle
+```text
+apk-releases/v1.7/RadioAutoPlay-v1.7.apk
 ```
 
----
+## How It Works
 
-## 🚀 Getting Started
+```text
+Charger connected
+      |
+      v
+ChargerReceiver starts RadioService
+      |
+      v
+10-second delay
+      |
+      v
+Random intro sound
+      |
+      v
+Hidden WebView opens the station webpage
+      |
+      v
+Autoplay script starts the page player
+      |
+      v
+Volume normalization keeps playback controlled
+      |
+      v
+Charger disconnected -> playback stops
+```
 
-### Build
+## Android Studio Setup
 
-1. Clone this repo  
-2. Open in **Android Studio** (Arctic Fox or newer)  
-3. Click **Run ▶**
+1. Install **JDK 17**.
+2. Open this project folder in Android Studio.
+3. Go to `File > Settings > Build, Execution, Deployment > Build Tools > Gradle`.
+4. Set **Gradle JDK** to JDK 17.
+5. Click **Sync Project with Gradle Files**.
+6. Run the app on a phone or emulator.
 
-Or build from command line:
+Command-line build:
+
 ```bash
 ./gradlew assembleDebug
 ```
-The APK will be at `app/build/outputs/apk/debug/app-debug.apk`.
 
-Built APKs are also archived by version under:
+Debug APK output:
 
 ```text
-apk-releases/v1.4/RadioAutoPlay-v1.4.apk
+app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### Updating an installed APK
+## Recommended Phone Setup
 
-Android only allows an app update when the package name, signing certificate, and version code are valid:
+For reliable always-on charger behavior:
 
-- Package name stays `com.radioautoplay`
-- Version code is now `5`
-- From v1.2 onward, debug and release APKs are signed with the bundled `app/radioautoplay-upload.jks`
+- Open the app once after installing.
+- Allow notifications.
+- Disable battery optimization for **Radio AutoPlay**.
+- Allow autostart/background activity if your phone brand has those settings.
+- Keep Wi-Fi enabled if the phone is mounted in one place.
+- Use the persistent notification to reopen the app if needed.
 
-If your currently installed APK was signed by Android Studio's old debug key or a GitHub runner key, Android may show an update/install conflict once. In that case, uninstall the old app one time, install v1.2, and future APKs built from this repo should update normally.
+Android may block apps from visually opening their activity from the lock screen, so Radio AutoPlay is designed to run audio in the background.
 
-The in-app updater checks the latest GitHub Release and downloads the attached `.apk` without opening GitHub in the browser. Android still shows its normal install confirmation screen because regular apps cannot silently replace themselves.
+## Managing Stations
 
-### Publishing an update
+The app stores stations in SharedPreferences. You can:
 
-1. Increase `versionCode` and `versionName` in `app/build.gradle`
-2. Build and test locally
-3. Commit and push the code
-4. Push a matching version tag, for example `v1.3`
+- Use the built-in webpage station pool.
+- Add your own `https://...` webpage station links.
+- Import many links from CSV.
+- Delete stations from the list.
+- Shuffle stations on every charger connection.
 
-The `Release APK` GitHub workflow builds the signed APK, saves it under `apk-releases/<version>/`, and attaches it to the GitHub Release. Installed apps then see that release through the in-app updater.
-
-### Add your first stream
-
-1. Open the app  
-2. Use the preloaded streams, or paste your own stream URL into the input field
-3. Tap **+ Add Stream** if adding a custom stream
-4. Choose **Webpage stations by default** if you want charger autoplay to prefer website radio players, or leave it off to prefer direct in-app streams
-5. Plug in your charger — the app starts buffering immediately, plays an intro, loops the connecting audio if needed, then starts radio automatically 🎶
-
-### Keep autoplay reliable
-
-Open the app once after installing it. This starts the charger monitor notification, which keeps charger connect/disconnect detection alive while the phone is locked.
-
-After a reboot, the app restarts the charger monitor automatically using Android's boot broadcasts. Stream URLs are stored in device-protected storage on Android 7+, so the monitor can be ready even before the first unlock after boot.
-
-On some Android skins, also allow this app in battery/autostart settings:
-
-- Disable battery optimization for **Radio AutoPlay**
-- Allow **Auto start** / **Run in background**
-- Allow notifications, so Android can keep the foreground monitor alive
-
-Android 10+ usually blocks apps from visually opening their screen from the background or lock screen. The app is designed to play/stop audio in the background instead; tap the persistent notification if you want to open the screen.
-
-Webpage stations are opened inside a hidden WebView in the foreground playback service. The service requests audio focus, keeps CPU/Wi-Fi locks, injects autoplay/click handling, and switches away if the page does not start within 17 seconds.
-
-### Import streams from Excel / CSV
-
-Custom intros are optional. If no custom intro sound is saved, the app randomly picks one of the bundled startup sounds and then uses the connecting loop while the station buffers.
-
-Create a spreadsheet with one stream URL per row, then export or save it as a `.csv` file.
-
-Recommended format:
-
-```csv
-url
-https://example.com/stream1.mp3
-https://example.com/stream2
-https://example.com/live.m3u8
-```
-
-The importer scans every cell in the CSV and imports values that start with `http://` or `https://`, so this also works:
+CSV example:
 
 ```csv
 name,url
-Morning Radio,https://example.com/morning
-Night Radio,https://example.com/night
+Today Hits,https://onlineradiobox.com/us/977todayshits/?cs=us.977todayshits&played=1
+Comedy,https://onlineradiobox.com/us/977comedy/?cs=us.977comedy&played=1
+NPR,https://onlineradiobox.com/us/?cs=us.npr&played=1
 ```
 
-Duplicate links are skipped automatically.
+## In-App Updates
 
----
+Radio AutoPlay checks the latest GitHub Release from inside the app.
 
-## 🔧 Supported Stream Formats
+When a newer APK is available, the app can:
 
-Any URL that Android's `MediaPlayer` can handle:
-- Icecast / SHOUTcast HTTP streams (`.mp3`, `.aac`, `.ogg`)
-- Raw MP3/AAC HTTP streams
-- HLS (`.m3u8`) — Android 4.1+
-- Most proxy streams
-- Simple HTML player pages that contain an `<audio>`, `<video>`, or `<source>` stream URL
+- Show an update prompt.
+- Download the APK through Android DownloadManager.
+- Open Android's normal installer screen.
 
----
+Android does not allow normal apps to silently update themselves, so the final install confirmation is still shown by the system.
 
-## 📋 Permissions Used
+## Publishing A New Release
+
+1. Increase `versionCode` and `versionName` in `app/build.gradle`.
+2. Update the in-app changelog in `app/src/main/res/values/strings.xml`.
+3. Build and test locally:
+
+```bash
+./gradlew assembleDebug lintDebug
+```
+
+4. Commit and push `main`.
+5. Push a matching tag:
+
+```bash
+git tag -a v1.8 -m "Radio AutoPlay v1.8"
+git push origin main
+git push origin v1.8
+```
+
+The `Release APK` workflow builds the signed APK, archives it in the repo, and creates a GitHub Release.
+
+## Project Structure
+
+```text
+app/src/main/java/com/radioautoplay/
+  ChargerReceiver.java        # Receives charger connect/disconnect events
+  ChargerMonitorService.java  # Keeps charger monitoring alive in background
+  RadioService.java           # Playback, WebView player, normalizer, failover, logs
+  StreamUrlManager.java       # Station storage and defaults
+  IntroSoundManager.java      # Custom/random intro sound storage
+  MainActivity.java           # Main UI and controls
+  UpdateManager.java          # In-app update flow
+  DiagnosticsLogger.java      # Persistent local log writer
+  UrlAdapter.java             # RecyclerView station list
+```
+
+## Permissions
 
 | Permission | Why |
 |---|---|
-| `INTERNET` | To stream audio |
-| `FOREGROUND_SERVICE` | To keep playing with screen off |
-| `RECEIVE_BOOT_COMPLETED` | (Future) Re-register receiver after reboot |
-| `WAKE_LOCK` | Prevent CPU sleep during playback |
-
----
-
-## 🛠 How It Works
-
-```
-Charger plugged in
-      │
-      ▼
-ChargerReceiver.onReceive(ACTION_POWER_CONNECTED)
-      │
-      ├── shuffle ON?  → StreamUrlManager.getNextUrl() picks random URL
-      └── shuffle OFF? → StreamUrlManager.getNextUrl() picks next in list
-      │
-      ▼
-RadioService starts as a ForegroundService
-Bundled or custom random intro plays while the stream begins buffering
-      │
-      ▼
-Connecting audio loops until MediaPlayer.prepareAsync() finishes
-      │
-      ├── starts within 17 seconds → MediaPlayer.start()
-      └── fails or times out      → try another saved stream
-      │
-      ▼
-Charger unplugged → ChargerReceiver sends STOP → RadioService releases MediaPlayer
-```
-
----
+| `INTERNET` | Load webpage stations and stream audio |
+| `ACCESS_NETWORK_STATE` | Detect network loss/reconnect |
+| `FOREGROUND_SERVICE` | Keep playback alive in background |
+| `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Media playback foreground service on newer Android |
+| `POST_NOTIFICATIONS` | Show playback/update notifications |
+| `RECEIVE_BOOT_COMPLETED` | Restart charger monitor after reboot |
+| `REQUEST_INSTALL_PACKAGES` | Open downloaded APK update installer |
+| `WAKE_LOCK` | Keep CPU awake during playback |
 
 ## License
 

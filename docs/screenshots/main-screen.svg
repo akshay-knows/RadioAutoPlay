@@ -1,0 +1,51 @@
+<svg width="420" height="860" viewBox="0 0 420 860" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Radio AutoPlay main screen preview">
+  <defs>
+    <linearGradient id="phone" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#202033"/>
+      <stop offset="1" stop-color="#101018"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000" flood-opacity="0.42"/>
+    </filter>
+  </defs>
+  <rect width="420" height="860" rx="42" fill="#08080d"/>
+  <rect x="16" y="16" width="388" height="828" rx="32" fill="url(#phone)" filter="url(#shadow)"/>
+  <rect x="36" y="46" width="348" height="760" rx="22" fill="#121212"/>
+  <circle cx="210" cy="34" r="5" fill="#2e2e3c"/>
+
+  <text x="58" y="84" fill="#eeeeee" font-family="Arial, sans-serif" font-size="24" font-weight="700">Radio AutoPlay</text>
+  <text x="58" y="108" fill="#888888" font-family="Arial, sans-serif" font-size="13">v1.7</text>
+  <text x="322" y="92" fill="#888888" font-family="Arial, sans-serif" font-size="14" font-weight="700">IDLE</text>
+
+  <rect x="58" y="132" width="304" height="132" rx="12" fill="#1E1E2E"/>
+  <text x="78" y="164" fill="#888888" font-family="Arial, sans-serif" font-size="11" font-weight="700">NOW PLAYING</text>
+  <text x="78" y="194" fill="#eeeeee" font-family="Arial, sans-serif" font-size="14">Opening web station...</text>
+  <rect x="78" y="214" width="264" height="36" rx="8" fill="#7C4DFF"/>
+  <text x="183" y="237" fill="#ffffff" font-family="Arial, sans-serif" font-size="14" font-weight="700">Play</text>
+
+  <rect x="58" y="284" width="304" height="92" rx="12" fill="#1E1E2E"/>
+  <text x="78" y="316" fill="#eeeeee" font-family="Arial, sans-serif" font-size="16" font-weight="700">Shuffle on plug-in</text>
+  <text x="78" y="340" fill="#888888" font-family="Arial, sans-serif" font-size="12">Random stream every charger connect</text>
+  <rect x="306" y="314" width="42" height="24" rx="12" fill="#7C4DFF"/>
+  <circle cx="336" cy="326" r="10" fill="#ffffff"/>
+
+  <rect x="58" y="394" width="304" height="92" rx="12" fill="#1E1E2E"/>
+  <text x="78" y="426" fill="#eeeeee" font-family="Arial, sans-serif" font-size="16" font-weight="700">Quiet hours</text>
+  <text x="78" y="450" fill="#888888" font-family="Arial, sans-serif" font-size="12">Silent from 12:00 AM to 6:00 AM</text>
+  <rect x="306" y="424" width="42" height="24" rx="12" fill="#00E676"/>
+  <circle cx="336" cy="436" r="10" fill="#ffffff"/>
+
+  <rect x="58" y="504" width="304" height="90" rx="12" fill="#1E1E2E"/>
+  <text x="78" y="536" fill="#eeeeee" font-family="Arial, sans-serif" font-size="16" font-weight="700">Web Player Mode</text>
+  <text x="78" y="560" fill="#888888" font-family="Arial, sans-serif" font-size="12">All stations run through webpage links</text>
+  <text x="284" y="536" fill="#7C4DFF" font-family="Arial, sans-serif" font-size="12" font-weight="700">ON</text>
+
+  <rect x="58" y="614" width="304" height="116" rx="12" fill="#1E1E2E"/>
+  <text x="78" y="646" fill="#888888" font-family="Arial, sans-serif" font-size="11" font-weight="700">ADD STREAM URL</text>
+  <rect x="78" y="664" width="264" height="36" rx="8" fill="#151521" stroke="#3b3b55"/>
+  <text x="94" y="687" fill="#888888" font-family="Arial, sans-serif" font-size="12">https://example.com/station</text>
+  <text x="78" y="722" fill="#7C4DFF" font-family="Arial, sans-serif" font-size="13" font-weight="700">+ Add Stream</text>
+
+  <text x="58" y="766" fill="#888888" font-family="Arial, sans-serif" font-size="11" font-weight="700">SAVED STREAMS</text>
+  <rect x="58" y="784" width="304" height="2" fill="#2b2b3b"/>
+</svg>
