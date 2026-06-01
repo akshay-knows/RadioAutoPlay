@@ -16,6 +16,7 @@ An Android app that **automatically starts playing a radio/audio stream when you
 | **Sequential mode** | Cycles through your streams in order |
 | **Playback source switch** | Choose whether charger autoplay prefers direct in-app streams or webpage station players |
 | **Stable APK updates** | Debug and release builds use the same bundled project signing key from v1.2 onward |
+| **In-app updater** | Checks GitHub Releases, prompts inside the app, downloads the APK, and opens Android's installer |
 | **Multiple intro sounds** | Bundled startup sounds and optional custom audio are chosen randomly while the station starts buffering |
 | **Voice announcements** | Announces time every hour/half-hour, stream failures, network loss, low battery, and music start without reading link names |
 | **Quiet hours** | Automatically refuses or stops playback from 12:00 AM to 6:00 AM |
@@ -68,15 +69,32 @@ Or build from command line:
 ```
 The APK will be at `app/build/outputs/apk/debug/app-debug.apk`.
 
+Built APKs are also archived by version under:
+
+```text
+apk-releases/v1.3/RadioAutoPlay-v1.3.apk
+```
+
 ### Updating an installed APK
 
 Android only allows an app update when the package name, signing certificate, and version code are valid:
 
 - Package name stays `com.radioautoplay`
-- Version code is now `3`
+- Version code is now `4`
 - From v1.2 onward, debug and release APKs are signed with the bundled `app/radioautoplay-upload.jks`
 
 If your currently installed APK was signed by Android Studio's old debug key or a GitHub runner key, Android may show an update/install conflict once. In that case, uninstall the old app one time, install v1.2, and future APKs built from this repo should update normally.
+
+The in-app updater checks the latest GitHub Release and downloads the attached `.apk` without opening GitHub in the browser. Android still shows its normal install confirmation screen because regular apps cannot silently replace themselves.
+
+### Publishing an update
+
+1. Increase `versionCode` and `versionName` in `app/build.gradle`
+2. Build and test locally
+3. Commit and push the code
+4. Push a matching version tag, for example `v1.3`
+
+The `Release APK` GitHub workflow builds the signed APK, saves it under `apk-releases/<version>/`, and attaches it to the GitHub Release. Installed apps then see that release through the in-app updater.
 
 ### Add your first stream
 

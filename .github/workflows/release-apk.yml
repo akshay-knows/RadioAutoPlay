@@ -1,0 +1,57 @@
+name: Release APK
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, archive, and release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Build signed APK
+        run: ./gradlew assembleDebug
+
+      - name: Archive versioned APK in repo
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          mkdir -p "apk-releases/${VERSION}"
+          cp app/build/outputs/apk/debug/app-debug.apk "apk-releases/${VERSION}/RadioAutoPlay-${VERSION}.apk"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "apk-releases/${VERSION}/RadioAutoPlay-${VERSION}.apk"
+          if git diff --cached --quiet; then
+            echo "APK already archived."
+          else
+            git commit -m "Archive APK ${VERSION}"
+            git push origin main
+          fi
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apk-releases/${{ github.ref_name }}/RadioAutoPlay-${{ github.ref_name }}.apk
+          generate_release_notes: true

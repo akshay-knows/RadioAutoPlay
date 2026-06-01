@@ -36,6 +36,7 @@ public class MainActivity extends AppCompatActivity {
 
     private StreamUrlManager urlManager;
     private IntroSoundManager introSoundManager;
+    private UpdateManager updateManager;
     private UrlAdapter        adapter;
     private List<String>      urlList;
 
@@ -91,6 +92,7 @@ public class MainActivity extends AppCompatActivity {
 
         urlManager = new StreamUrlManager(this);
         introSoundManager = new IntroSoundManager(this);
+        updateManager = new UpdateManager(this);
 
         bindViews();
         setupRecyclerView();
@@ -99,6 +101,8 @@ public class MainActivity extends AppCompatActivity {
         refreshWebStationsSwitch();
         requestNotificationPermissionIfNeeded();
         ChargerMonitorService.start(this);
+        updateManager.register();
+        updateManager.checkForUpdates(false);
     }
 
     @Override
@@ -114,6 +118,12 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         unregisterReceiver(serviceReceiver);
+    }
+
+    @Override
+    protected void onDestroy() {
+        updateManager.unregister();
+        super.onDestroy();
     }
 
     // ── View binding ──────────────────────────────────────────────────────────
@@ -171,6 +181,7 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btn_import_csv).setOnClickListener(v -> openCsvPicker());
         findViewById(R.id.btn_add_intro).setOnClickListener(v -> openIntroSoundPicker());
         findViewById(R.id.btn_clear_intro).setOnClickListener(v -> clearIntroSounds());
+        findViewById(R.id.btn_check_updates).setOnClickListener(v -> updateManager.checkForUpdates(true));
 
         // Play / Stop button
         btnPlayStop.setOnClickListener(v -> {
