@@ -44,6 +44,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView   tvCurrentUrl;
     private Button     btnPlayStop;
     private Switch     switchShuffle;
+    private Switch     switchWebStations;
     private EditText   etNewUrl;
     private RecyclerView rvUrls;
 
@@ -95,6 +96,7 @@ public class MainActivity extends AppCompatActivity {
         setupRecyclerView();
         setupControls();
         refreshShuffleSwitch();
+        refreshWebStationsSwitch();
         requestNotificationPermissionIfNeeded();
         ChargerMonitorService.start(this);
     }
@@ -121,14 +123,17 @@ public class MainActivity extends AppCompatActivity {
         tvCurrentUrl  = findViewById(R.id.tv_current_url);
         btnPlayStop   = findViewById(R.id.btn_play_stop);
         switchShuffle = findViewById(R.id.switch_shuffle);
+        switchWebStations = findViewById(R.id.switch_web_stations);
         etNewUrl      = findViewById(R.id.et_new_url);
         rvUrls        = findViewById(R.id.rv_urls);
+        TextView version = findViewById(R.id.tv_app_version);
+        version.setText("v" + BuildConfig.VERSION_NAME);
     }
 
     // ── RecyclerView ──────────────────────────────────────────────────────────
 
     private void setupRecyclerView() {
-        urlList = urlManager.getUrls();
+        urlList = urlManager.getAllPlaybackUrls();
         adapter = new UrlAdapter(urlList, new UrlAdapter.OnItemActionListener() {
             @Override
             public void onDelete(int position) {
@@ -146,7 +151,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void refreshList() {
         urlList.clear();
-        urlList.addAll(urlManager.getUrls());
+        urlList.addAll(urlManager.getAllPlaybackUrls());
         adapter.setActiveIndex(urlManager.getActiveIndex());
         adapter.notifyDataSetChanged();
         updateEmptyState();
@@ -188,10 +193,22 @@ public class MainActivity extends AppCompatActivity {
                             : "Shuffle OFF – streams play in order",
                     Toast.LENGTH_SHORT).show();
         });
+
+        switchWebStations.setOnCheckedChangeListener((btn, checked) -> {
+            urlManager.setWebStationsDefault(checked);
+            Toast.makeText(this,
+                    checked ? "Webpage stations will be preferred on charger connect"
+                            : "Direct in-app streams will be preferred on charger connect",
+                    Toast.LENGTH_SHORT).show();
+        });
     }
 
     private void refreshShuffleSwitch() {
         switchShuffle.setChecked(urlManager.isShuffleEnabled());
+    }
+
+    private void refreshWebStationsSwitch() {
+        switchWebStations.setChecked(urlManager.isWebStationsDefault());
     }
 
     private void requestNotificationPermissionIfNeeded() {
@@ -330,7 +347,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void playIndex(int index) {
-        List<String> urls = urlManager.getUrls();
+        List<String> urls = urlManager.getAllPlaybackUrls();
         if (index < 0 || index >= urls.size()) return;
         urlManager.setActiveIndex(index);
         adapter.setActiveIndex(index);

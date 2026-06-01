@@ -14,16 +14,21 @@ An Android app that **automatically starts playing a radio/audio stream when you
 | **Animated splash screen** | Shows a quick animated launch screen before the main controls |
 | **Shuffle mode** | Picks a random saved stream every time you plug in |
 | **Sequential mode** | Cycles through your streams in order |
-| **Multiple intro sounds** | Pick custom intro audio files; the app chooses one randomly before starting music |
+| **Playback source switch** | Choose whether charger autoplay prefers direct in-app streams or webpage station players |
+| **Multiple intro sounds** | Bundled startup sounds and optional custom audio are chosen randomly while the station starts buffering |
 | **Voice announcements** | Announces time every hour/half-hour, stream failures, network loss, low battery, and the current station |
-| **Stream failover watchdog** | If a stream errors or does not start within 1 minute, the app automatically tries another saved stream |
+| **Quiet hours** | Automatically refuses or stops playback from 12:00 AM to 6:00 AM |
+| **Stream failover watchdog** | If a stream errors or does not start within 17 seconds, the app automatically tries another saved stream |
+| **Self-healing stations** | Failed stations are skipped for 30 minutes, then automatically retried later |
 | **HTML player link support** | If a station returns a simple browser player page, the app extracts `<audio>`, `<video>`, or `<source>` media URLs and retries with audio-friendly headers |
 | **Manage stream URLs** | Add, play, or remove any number of stream URLs |
 | **CSV import** | Import many stream links from a CSV file exported from Excel or Google Sheets |
 | **Preloaded streams** | Starts with 23 built-in radio/news/music stream URLs from the provided workbook |
+| **Web station pool** | Includes additional online radio station webpages that can be played through the WebView fallback |
 | **No hardcoded links** | All URLs are stored in SharedPreferences; fully user-configurable |
 | **Foreground service** | Keeps playing with screen off; shows a persistent notification |
 | **Light & lean** | No third-party streaming SDK; uses Android's built-in `MediaPlayer` |
+| **Connecting loop** | Plays the bundled `get_connected` audio in a loop after the intro until the stream is ready |
 
 ---
 
@@ -67,7 +72,8 @@ The APK will be at `app/build/outputs/apk/debug/app-debug.apk`.
 1. Open the app  
 2. Use the preloaded streams, or paste your own stream URL into the input field
 3. Tap **+ Add Stream** if adding a custom stream
-4. Plug in your charger — the app waits 5 seconds, plays the intro theme, then starts radio automatically 🎶
+4. Choose **Webpage stations by default** if you want charger autoplay to prefer website radio players, or leave it off to prefer direct in-app streams
+5. Plug in your charger — the app starts buffering immediately, plays an intro, loops the connecting audio if needed, then starts radio automatically 🎶
 
 ### Keep autoplay reliable
 
@@ -83,7 +89,11 @@ On some Android skins, also allow this app in battery/autostart settings:
 
 Android 10+ usually blocks apps from visually opening their screen from the background or lock screen. The app is designed to play/stop audio in the background instead; tap the persistent notification if you want to open the screen.
 
+Webpage stations are opened inside a hidden WebView in the foreground playback service. The service requests audio focus, keeps CPU/Wi-Fi locks, injects autoplay/click handling, and switches away if the page does not start within 17 seconds.
+
 ### Import streams from Excel / CSV
+
+Custom intros are optional. If no custom intro sound is saved, the app randomly picks one of the bundled startup sounds and then uses the connecting loop while the station buffers.
 
 Create a spreadsheet with one stream URL per row, then export or save it as a `.csv` file.
 
@@ -143,15 +153,12 @@ ChargerReceiver.onReceive(ACTION_POWER_CONNECTED)
       │
       ▼
 RadioService starts as a ForegroundService
-5-second quiet delay
+Bundled or custom random intro plays while the stream begins buffering
       │
       ▼
-Bundled intro MP3 plays
+Connecting audio loops until MediaPlayer.prepareAsync() finishes
       │
-      ▼
-MediaPlayer.prepareAsync()
-      │
-      ├── starts within 1 minute → MediaPlayer.start()
+      ├── starts within 17 seconds → MediaPlayer.start()
       └── fails or times out      → try another saved stream
       │
       ▼

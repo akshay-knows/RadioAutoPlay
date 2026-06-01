@@ -22,7 +22,11 @@ public class StreamUrlManager {
     private static final String KEY_SHUFFLE      = "shuffle_mode";
     private static final String KEY_DEFAULTS_ADDED = "default_streams_added";
     private static final String KEY_DEFAULTS_VERSION = "default_streams_version";
-    private static final int DEFAULT_STREAMS_VERSION = 2;
+    private static final String KEY_WEB_URLS = "web_stream_urls";
+    private static final String KEY_WEB_STATIONS_DEFAULT = "web_stations_default";
+    private static final String KEY_FAILED_UNTIL_PREFIX = "failed_until_";
+    private static final int DEFAULT_STREAMS_VERSION = 3;
+    private static final long FAILED_SKIP_MS = 30 * 60 * 1000L;
 
     private static final String[] DEFAULT_STREAM_URLS = {
             "https://stream.live.vc.bbcmedia.co.uk/bbc_world_service",
@@ -46,6 +50,39 @@ public class StreamUrlManager {
             "https://npr-ice.streamguys1.com/live.mp3",
             "https://apnews.cdnstream1.com/apnews",
             "https://tunein.cdnstream1.com/3519_96.mp3"
+    };
+
+    private static final String[] DEFAULT_WEB_STREAM_URLS = {
+            "https://onlineradiofm.in/stations/mirchi",
+            "https://onlineradiofm.in/stations/vividh-bharati",
+            "https://onlineradiofm.in/stations/fm-gold",
+            "https://onlineradiofm.in/stations/fm-rainbow",
+            "https://onlineradiofm.in/stations/bbc-hindi",
+            "https://onlineradiofm.in/stations/air-bhopal",
+            "https://onlineradiofm.in/stations/cmr-hindi-fm",
+            "https://onlineradiofm.in/stations/hungama-90s-once-again",
+            "https://onlineradiofm.in/stations/hungama-hot-now-bollywood",
+            "https://onlineradiofm.in/stations/city-mohammed-rafi",
+            "https://onlineradiofm.in/stations/city-kishore-kumar",
+            "https://onlineradiofm.in/stations/bollywood-and-beyond",
+            "https://onlineradiofm.in/stations/mirchi-new-jersey",
+            "https://onlineradiofm.in/stations/mirchi-bay-area",
+            "https://onlineradiofm.in/stations/hungama-punjabi-hits",
+            "https://onlineradiofm.in/stations/hungama-mehfil",
+            "https://onlineradiofm.in/stations/radio-hungama-hot-now-telugu",
+            "https://onlineradiofm.in/stations/bbc-world-servie",
+            "https://onlineradiofm.in/stations/bbc-asian-network",
+            "https://onlineradiobox.com/us/wbbr/?cs=us.wbbr&played=1",
+            "https://onlineradiobox.com/us/977todayshits/?cs=us.977todayshits&played=1",
+            "https://onlineradiobox.com/uk/capitalfmuk/?cs=uk.capitalfmuk&played=1",
+            "https://onlineradiobox.com/uk/?cs=uk.lbc973fm&played=1",
+            "https://onlineradiobox.com/uk/?cs=uk.smoothradio1022&played=1",
+            "https://onlineradiobox.com/in/?cs=in.ndtv&played=1",
+            "https://onlineradiobox.com/in/?cs=in.aajtak&played=1&p=3&tzLoc=Asia%2FCalcutta",
+            "https://onlineradiobox.com/in/?cs=in.karanaujla&played=1&p=4&tzLoc=Asia%2FCalcutta",
+            "https://onlineradiobox.com/in/?cs=in.air&played=1&p=7&tzLoc=Asia%2FCalcutta",
+            "https://onlineradiobox.com/in/?cs=za.hindvaniradio&played=1&p=1&sf_langs=hi%2C&tzLoc=Asia%2FCalcutta",
+            "https://onlineradiofm.in/stations/all-india-air-akashvani"
     };
 
     private static final String[] REMOVED_DEFAULT_STREAM_URLS = {
@@ -74,6 +111,21 @@ public class StreamUrlManager {
         Set<String> set = prefs.getStringSet(KEY_URLS, new LinkedHashSet<>());
         // LinkedHashSet preserves insertion order
         return new ArrayList<>(set);
+    }
+
+    public List<String> getWebUrls() {
+        Set<String> set = prefs.getStringSet(KEY_WEB_URLS, new LinkedHashSet<>());
+        return new ArrayList<>(set);
+    }
+
+    public List<String> getAllPlaybackUrls() {
+        List<String> urls = getUrls();
+        for (String webUrl : getWebUrls()) {
+            if (!urls.contains(webUrl)) {
+                urls.add(webUrl);
+            }
+        }
+        return urls;
     }
 
     public void addUrl(String url) {
@@ -138,7 +190,7 @@ public class StreamUrlManager {
 
     /** Returns the URL that should be played next (shuffled or sequential). */
     public String getNextUrl() {
-        List<String> urls = getUrls();
+        List<String> urls = getAutoPlaybackUrls();
         if (urls.isEmpty()) return null;
 
         int idx;
@@ -155,7 +207,7 @@ public class StreamUrlManager {
 
     /** Returns the currently active URL without advancing. */
     public String getCurrentUrl() {
-        List<String> urls = getUrls();
+        List<String> urls = getAutoPlaybackUrls();
         if (urls.isEmpty()) return null;
         int idx = getActiveIndex();
         if (idx >= urls.size()) idx = 0;
@@ -181,7 +233,51 @@ public class StreamUrlManager {
     }
 
     public boolean isEmpty() {
-        return getUrls().isEmpty();
+        return getAllPlaybackUrls().isEmpty();
+    }
+
+    public boolean isWebStreamUrl(String url) {
+        return url != null && getWebUrls().contains(url);
+    }
+
+    public boolean isWebStationsDefault() {
+        return prefs.getBoolean(KEY_WEB_STATIONS_DEFAULT, false);
+    }
+
+    public void setWebStationsDefault(boolean enabled) {
+        prefs.edit().putBoolean(KEY_WEB_STATIONS_DEFAULT, enabled).apply();
+    }
+
+    public void markStreamFailure(String url) {
+        if (url == null || url.trim().isEmpty()) return;
+        prefs.edit()
+                .putLong(KEY_FAILED_UNTIL_PREFIX + url, System.currentTimeMillis() + FAILED_SKIP_MS)
+                .apply();
+    }
+
+    public void markStreamSuccess(String url) {
+        if (url == null || url.trim().isEmpty()) return;
+        prefs.edit().remove(KEY_FAILED_UNTIL_PREFIX + url).apply();
+    }
+
+    public List<String> getAutoPlaybackUrls() {
+        List<String> preferred = isWebStationsDefault() ? getWebUrls() : getUrls();
+        List<String> available = filterTemporarilyFailed(preferred);
+        if (!available.isEmpty()) return available;
+
+        available = filterTemporarilyFailed(getAllPlaybackUrls());
+        return available.isEmpty() ? getAllPlaybackUrls() : available;
+    }
+
+    private List<String> filterTemporarilyFailed(List<String> urls) {
+        List<String> available = new ArrayList<>();
+        long now = System.currentTimeMillis();
+        for (String url : urls) {
+            if (prefs.getLong(KEY_FAILED_UNTIL_PREFIX + url, 0L) <= now) {
+                available.add(url);
+            }
+        }
+        return available;
     }
 
     private void syncDefaultStreamsIfNeeded() {
@@ -202,12 +298,25 @@ public class StreamUrlManager {
             }
         }
 
+        List<String> webCurrent = getWebUrls();
+        boolean webChanged = false;
+        for (String url : DEFAULT_WEB_STREAM_URLS) {
+            if (!webCurrent.contains(url)) {
+                webCurrent.add(url);
+                webChanged = true;
+            }
+        }
+
         SharedPreferences.Editor editor = prefs.edit()
                 .putBoolean(KEY_DEFAULTS_ADDED, true)
                 .putInt(KEY_DEFAULTS_VERSION, DEFAULT_STREAMS_VERSION);
         if (changed) {
             LinkedHashSet<String> set = new LinkedHashSet<>(current);
             editor.putStringSet(KEY_URLS, set);
+        }
+        if (webChanged) {
+            LinkedHashSet<String> set = new LinkedHashSet<>(webCurrent);
+            editor.putStringSet(KEY_WEB_URLS, set);
         }
         editor.apply();
     }

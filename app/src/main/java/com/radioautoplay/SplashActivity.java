@@ -6,6 +6,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.animation.AnimationUtils;
 import android.widget.ImageView;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -19,6 +20,8 @@ public class SplashActivity extends AppCompatActivity {
         setContentView(R.layout.activity_splash);
 
         ImageView logo = findViewById(R.id.iv_splash_logo);
+        TextView version = findViewById(R.id.tv_splash_version);
+        version.setText("v" + BuildConfig.VERSION_NAME);
         logo.startAnimation(AnimationUtils.loadAnimation(this, R.anim.splash_pulse));
 
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
