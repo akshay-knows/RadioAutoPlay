@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Radio AutoPlay</string>
-    <string name="changelog_v1_1">v1.1\n- Webpage station mode for charger autoplay\n- 17-second failover with temporary skip for bad stations\n- Random intro sounds and connecting loop audio\n- Quiet hours from 12:00 AM to 6:00 AM\n- Hour/half-hour, network, battery, and station announcements</string>
+    <string name="changelog_v1_1">v1.2\n- Stable app signing added so future APK updates install over older v1.2+ builds\n- Version code increased for Android update detection\n- Generic music-start announcement, without reading link names\n- Webpage station mode for charger autoplay\n- 17-second failover with temporary skip for bad stations\n- Random intro sounds and connecting loop audio\n- Quiet hours from 12:00 AM to 6:00 AM\n- Hour/half-hour, network, and battery announcements</string>
 </resources>

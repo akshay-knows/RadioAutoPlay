@@ -15,8 +15,9 @@ An Android app that **automatically starts playing a radio/audio stream when you
 | **Shuffle mode** | Picks a random saved stream every time you plug in |
 | **Sequential mode** | Cycles through your streams in order |
 | **Playback source switch** | Choose whether charger autoplay prefers direct in-app streams or webpage station players |
+| **Stable APK updates** | Debug and release builds use the same bundled project signing key from v1.2 onward |
 | **Multiple intro sounds** | Bundled startup sounds and optional custom audio are chosen randomly while the station starts buffering |
-| **Voice announcements** | Announces time every hour/half-hour, stream failures, network loss, low battery, and the current station |
+| **Voice announcements** | Announces time every hour/half-hour, stream failures, network loss, low battery, and music start without reading link names |
 | **Quiet hours** | Automatically refuses or stops playback from 12:00 AM to 6:00 AM |
 | **Stream failover watchdog** | If a stream errors or does not start within 17 seconds, the app automatically tries another saved stream |
 | **Self-healing stations** | Failed stations are skipped for 30 minutes, then automatically retried later |
@@ -66,6 +67,16 @@ Or build from command line:
 ./gradlew assembleDebug
 ```
 The APK will be at `app/build/outputs/apk/debug/app-debug.apk`.
+
+### Updating an installed APK
+
+Android only allows an app update when the package name, signing certificate, and version code are valid:
+
+- Package name stays `com.radioautoplay`
+- Version code is now `3`
+- From v1.2 onward, debug and release APKs are signed with the bundled `app/radioautoplay-upload.jks`
+
+If your currently installed APK was signed by Android Studio's old debug key or a GitHub runner key, Android may show an update/install conflict once. In that case, uninstall the old app one time, install v1.2, and future APKs built from this repo should update normally.
 
 ### Add your first stream
 
