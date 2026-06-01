@@ -34,8 +34,12 @@ public class UrlAdapter extends RecyclerView.Adapter<UrlAdapter.ViewHolder> {
     public void setActiveIndex(int index) {
         int old = activeIndex;
         activeIndex = index;
-        notifyItemChanged(old);
-        notifyItemChanged(activeIndex);
+        if (old >= 0 && old < urls.size()) {
+            notifyItemChanged(old);
+        }
+        if (activeIndex >= 0 && activeIndex < urls.size()) {
+            notifyItemChanged(activeIndex);
+        }
     }
 
     @NonNull

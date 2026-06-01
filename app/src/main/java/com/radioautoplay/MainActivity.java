@@ -46,6 +46,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView   tvCurrentUrl;
     private Button     btnPlayStop;
     private Switch     switchShuffle;
+    private Switch     switchQuietHours;
     private EditText   etNewUrl;
     private RecyclerView rvUrls;
 
@@ -99,6 +100,7 @@ public class MainActivity extends AppCompatActivity {
         setupRecyclerView();
         setupControls();
         refreshShuffleSwitch();
+        refreshQuietHoursSwitch();
         requestNotificationPermissionIfNeeded();
         ChargerMonitorService.start(this);
         updateManager.register();
@@ -133,6 +135,7 @@ public class MainActivity extends AppCompatActivity {
         tvCurrentUrl  = findViewById(R.id.tv_current_url);
         btnPlayStop   = findViewById(R.id.btn_play_stop);
         switchShuffle = findViewById(R.id.switch_shuffle);
+        switchQuietHours = findViewById(R.id.switch_quiet_hours);
         etNewUrl      = findViewById(R.id.et_new_url);
         rvUrls        = findViewById(R.id.rv_urls);
         TextView version = findViewById(R.id.tv_app_version);
@@ -208,10 +211,34 @@ public class MainActivity extends AppCompatActivity {
                     Toast.LENGTH_SHORT).show();
         });
 
+        switchQuietHours.setOnCheckedChangeListener((btn, checked) -> {
+            urlManager.setQuietHoursEnabled(checked);
+            if (checked && serviceRunning && isQuietHoursNow()) {
+                stopService();
+                Toast.makeText(this, "Quiet hours ON. Playback stopped until 6:00 AM.",
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
+            Toast.makeText(this,
+                    checked ? "Quiet hours ON – silent from 12:00 AM to 6:00 AM"
+                            : "Quiet hours OFF – charger playback can start anytime",
+                    Toast.LENGTH_SHORT).show();
+        });
+
     }
 
     private void refreshShuffleSwitch() {
         switchShuffle.setChecked(urlManager.isShuffleEnabled());
+    }
+
+    private void refreshQuietHoursSwitch() {
+        switchQuietHours.setChecked(urlManager.isQuietHoursEnabled());
+    }
+
+    private boolean isQuietHoursNow() {
+        java.util.Calendar calendar = java.util.Calendar.getInstance();
+        int hour = calendar.get(java.util.Calendar.HOUR_OF_DAY);
+        return hour >= 0 && hour < 6;
     }
 
     private void requestNotificationPermissionIfNeeded() {
@@ -305,7 +332,11 @@ public class MainActivity extends AppCompatActivity {
 
     private List<String> readStreamUrlsFromCsv(Uri uri) throws Exception {
         List<String> links = new ArrayList<>();
-        try (InputStream inputStream = getContentResolver().openInputStream(uri);
+        InputStream stream = getContentResolver().openInputStream(uri);
+        if (stream == null) {
+            throw new IllegalStateException("Selected file could not be opened.");
+        }
+        try (InputStream inputStream = stream;
              BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {

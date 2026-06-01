@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Radio AutoPlay</string>
-    <string name="changelog_v1_1">v1.6\n- Update-available notification added for remote phones\n- Web playback stability and diagnostics monitoring retained\n- All links continue to run through webpage mode\n- Announcements keep duck-and-restore behavior</string>
+    <string name="changelog_v1_1">v1.7\n- Added 10-second delayed startup before intro/playback\n- Added volume normalization for direct and webpage streams\n- Added quiet-hours toggle for 12:00 AM to 6:00 AM\n- Added new OnlineRadioBox stations and kept webpage playback stable</string>
 </resources>

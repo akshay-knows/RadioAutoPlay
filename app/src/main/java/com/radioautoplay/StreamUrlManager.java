@@ -20,12 +20,13 @@ public class StreamUrlManager {
     private static final String KEY_URLS         = "stream_urls";
     private static final String KEY_ACTIVE_IDX   = "active_index";
     private static final String KEY_SHUFFLE      = "shuffle_mode";
+    private static final String KEY_QUIET_HOURS  = "quiet_hours_enabled";
     private static final String KEY_DEFAULTS_ADDED = "default_streams_added";
     private static final String KEY_DEFAULTS_VERSION = "default_streams_version";
     private static final String KEY_WEB_URLS = "web_stream_urls";
     private static final String KEY_WEB_STATIONS_DEFAULT = "web_stations_default";
     private static final String KEY_FAILED_UNTIL_PREFIX = "failed_until_";
-    private static final int DEFAULT_STREAMS_VERSION = 3;
+    private static final int DEFAULT_STREAMS_VERSION = 4;
     private static final long FAILED_SKIP_MS = 30 * 60 * 1000L;
 
     private static final String[] DEFAULT_STREAM_URLS = {
@@ -74,6 +75,8 @@ public class StreamUrlManager {
             "https://onlineradiofm.in/stations/bbc-asian-network",
             "https://onlineradiobox.com/us/wbbr/?cs=us.wbbr&played=1",
             "https://onlineradiobox.com/us/977todayshits/?cs=us.977todayshits&played=1",
+            "https://onlineradiobox.com/us/977comedy/?cs=us.977comedy&played=1",
+            "https://onlineradiobox.com/us/?cs=us.npr&played=1",
             "https://onlineradiobox.com/uk/capitalfmuk/?cs=uk.capitalfmuk&played=1",
             "https://onlineradiobox.com/uk/?cs=uk.lbc973fm&played=1",
             "https://onlineradiobox.com/uk/?cs=uk.smoothradio1022&played=1",
@@ -82,7 +85,14 @@ public class StreamUrlManager {
             "https://onlineradiobox.com/in/?cs=in.karanaujla&played=1&p=4&tzLoc=Asia%2FCalcutta",
             "https://onlineradiobox.com/in/?cs=in.air&played=1&p=7&tzLoc=Asia%2FCalcutta",
             "https://onlineradiobox.com/in/?cs=za.hindvaniradio&played=1&p=1&sf_langs=hi%2C&tzLoc=Asia%2FCalcutta",
-            "https://onlineradiofm.in/stations/all-india-air-akashvani"
+            "https://onlineradiofm.in/stations/all-india-air-akashvani",
+            "https://onlineradiobox.com/in/?cs=in.easy60s&played=1&p=4&tzLoc=Asia%2FCalcutta",
+            "https://onlineradiobox.com/in/Karnataka-/?cs=in.easy10s&played=1",
+            "https://onlineradiobox.com/in/genre/news/?cs=in.ndtvindia&played=1",
+            "https://onlineradiobox.com/genre/talk/?cs=ca.cbcrtoronto&played=1&p=1&tzLoc=Asia%2FCalcutta",
+            "https://onlineradiobox.com/search?cs=uk.capitalfmuk&played=1&q=capital&radioid=1018&tzLoc=Asia%2FCalcutta"
+
+
     };
 
     private static final String[] REMOVED_DEFAULT_STREAM_URLS = {
@@ -231,6 +241,14 @@ public class StreamUrlManager {
         prefs.edit().putBoolean(KEY_SHUFFLE, enabled).apply();
     }
 
+    public boolean isQuietHoursEnabled() {
+        return prefs.getBoolean(KEY_QUIET_HOURS, true);
+    }
+
+    public void setQuietHoursEnabled(boolean enabled) {
+        prefs.edit().putBoolean(KEY_QUIET_HOURS, enabled).apply();
+    }
+
     public boolean isEmpty() {
         return getAllPlaybackUrls().isEmpty();
     }
@@ -263,8 +281,7 @@ public class StreamUrlManager {
         List<String> preferred = getWebUrls();
         List<String> available = filterTemporarilyFailed(preferred);
         if (!available.isEmpty()) return available;
-
-        return available;
+        return preferred;
     }
 
     private List<String> filterTemporarilyFailed(List<String> urls) {
