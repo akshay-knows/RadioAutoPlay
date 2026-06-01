@@ -45,6 +45,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView   tvStatus;
     private TextView   tvCurrentUrl;
     private Button     btnPlayStop;
+    private Switch     switchAppEnabled;
     private Switch     switchShuffle;
     private Switch     switchQuietHours;
     private EditText   etNewUrl;
@@ -80,6 +81,10 @@ public class MainActivity extends AppCompatActivity {
             String  status  = intent.getStringExtra(RadioService.EXTRA_STATUS);
 
             serviceRunning = playing || status != null;
+            if (!urlManager.isAppEnabled() && !playing) {
+                showAppDisabledState();
+                return;
+            }
             updatePlaybackUI(playing, url, error, status);
         }
     };
@@ -99,6 +104,7 @@ public class MainActivity extends AppCompatActivity {
         bindViews();
         setupRecyclerView();
         setupControls();
+        refreshAppEnabledSwitch();
         refreshShuffleSwitch();
         refreshQuietHoursSwitch();
         requestNotificationPermissionIfNeeded();
@@ -113,6 +119,7 @@ public class MainActivity extends AppCompatActivity {
         // Register for service state broadcasts
         IntentFilter filter = new IntentFilter(RadioService.BROADCAST_STATE);
         ContextCompat.registerReceiver(this, serviceReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
+        refreshAppEnabledSwitch();
         refreshList();
     }
 
@@ -134,6 +141,7 @@ public class MainActivity extends AppCompatActivity {
         tvStatus      = findViewById(R.id.tv_status);
         tvCurrentUrl  = findViewById(R.id.tv_current_url);
         btnPlayStop   = findViewById(R.id.btn_play_stop);
+        switchAppEnabled = findViewById(R.id.switch_app_enabled);
         switchShuffle = findViewById(R.id.switch_shuffle);
         switchQuietHours = findViewById(R.id.switch_quiet_hours);
         etNewUrl      = findViewById(R.id.et_new_url);
@@ -194,12 +202,29 @@ public class MainActivity extends AppCompatActivity {
             if (serviceRunning) {
                 stopService();
             } else {
+                if (!urlManager.isAppEnabled()) {
+                    Toast.makeText(this, "Turn Radio AutoPlay ON first.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 if (urlManager.isEmpty()) {
                     Toast.makeText(this, "Add at least one stream URL first.", Toast.LENGTH_SHORT).show();
                     return;
                 }
                 playIndex(urlManager.getActiveIndex());
             }
+        });
+
+        switchAppEnabled.setOnCheckedChangeListener((btn, checked) -> {
+            urlManager.setAppEnabled(checked);
+            if (!checked) {
+                stopService();
+                showAppDisabledState();
+            } else {
+                updatePlaybackUI(false, null, null, null);
+            }
+            Toast.makeText(this,
+                    checked ? "Radio AutoPlay ON" : "Radio AutoPlay OFF",
+                    Toast.LENGTH_SHORT).show();
         });
 
         // Shuffle switch
@@ -225,6 +250,21 @@ public class MainActivity extends AppCompatActivity {
                     Toast.LENGTH_SHORT).show();
         });
 
+    }
+
+    private void refreshAppEnabledSwitch() {
+        switchAppEnabled.setChecked(urlManager.isAppEnabled());
+        if (!urlManager.isAppEnabled()) {
+            showAppDisabledState();
+        }
+    }
+
+    private void showAppDisabledState() {
+        tvStatus.setText("● Off");
+        tvStatus.setTextColor(getResources().getColor(R.color.idle_grey));
+        btnPlayStop.setText("▶  Play");
+        tvCurrentUrl.setText("Radio AutoPlay is turned off");
+        tvCurrentUrl.setVisibility(View.VISIBLE);
     }
 
     private void refreshShuffleSwitch() {
@@ -381,6 +421,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void playIndex(int index) {
+        if (!urlManager.isAppEnabled()) {
+            Toast.makeText(this, "Radio AutoPlay is turned off.", Toast.LENGTH_SHORT).show();
+            return;
+        }
         List<String> urls = urlManager.getAllPlaybackUrls();
         if (index < 0 || index >= urls.size()) return;
         urlManager.setActiveIndex(index);

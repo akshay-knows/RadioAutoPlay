@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Radio AutoPlay</string>
-    <string name="changelog_v1_1">v1.7\n- Added 10-second delayed startup before intro/playback\n- Added volume normalization for direct and webpage streams\n- Added quiet-hours toggle for 12:00 AM to 6:00 AM\n- Added new OnlineRadioBox stations and kept webpage playback stable</string>
+    <string name="changelog_v1_1">v1.8\n- Changed charger startup delay from 10 seconds to 2 seconds\n- Added master Radio AutoPlay ON/OFF switch\n- Fixed offline backup playback crash when network disconnects\n- Kept volume normalization and webpage playback improvements</string>
 </resources>

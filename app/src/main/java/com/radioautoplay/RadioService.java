@@ -60,7 +60,7 @@ public class RadioService extends Service {
     private static final String TAG          = "RadioService";
     private static final String CHANNEL_ID   = "radio_channel";
     private static final int    NOTIF_ID     = 1;
-    private static final long   PLAYBACK_START_DELAY_MS = 10_000L;
+    private static final long   PLAYBACK_START_DELAY_MS = 2_000L;
     private static final long   STREAM_START_TIMEOUT_MS = 17_000L;
     private static final long   WEB_POST_LOAD_START_TIMEOUT_MS = 20_000L;
     private static final long   WEB_HEALTHCHECK_INTERVAL_MS = 15_000L;
@@ -171,6 +171,14 @@ public class RadioService extends Service {
             logInfo("ACTION_PLAY received");
             String url = intent.getStringExtra(EXTRA_URL);
             lastRequestedUrl = url;
+            if (urlManager != null && !urlManager.isAppEnabled()) {
+                currentUrl = url;
+                startForeground(NOTIF_ID, buildNotification("App disabled", currentUrl));
+                broadcastState(false, null, "Radio AutoPlay is turned off");
+                stopPlayback(false);
+                stopSelf();
+                return START_NOT_STICKY;
+            }
             if (url != null && url.equals(activePlaybackUrl)
                     && (isPlaying
                     || mediaPlayer != null
@@ -234,14 +242,21 @@ public class RadioService extends Service {
         offlineMode = false;
         currentUrl = url;
         activePlaybackUrl = url;
-        startForeground(NOTIF_ID, buildNotification("Starting in 10 seconds", url));
-        broadcastState(false, null, "Starting in 10 seconds");
+        startForeground(NOTIF_ID, buildNotification("Starting in 2 seconds", url));
+        broadcastState(false, null, "Starting in 2 seconds");
         logInfo("Delaying playback start by " + PLAYBACK_START_DELAY_MS + "ms requestId="
                 + requestId + " url=" + url);
 
         introStartDelay = () -> {
             introStartDelay = null;
             if (requestId != playbackRequestId) return;
+            if (urlManager != null && !urlManager.isAppEnabled()) {
+                updateNotification("App disabled", currentUrl);
+                broadcastState(false, null, "Radio AutoPlay is turned off");
+                stopPlayback(false);
+                stopSelf();
+                return;
+            }
             if (isQuietHoursNow()) {
                 currentUrl = url;
                 updateNotification("Quiet hours", currentUrl);
@@ -1275,7 +1290,8 @@ public class RadioService extends Service {
 
     private void stopForQuietHoursIfNeeded() {
         if (!isQuietHoursNow()) return;
-        if (!isPlaying && mediaPlayer == null && introPlayer == null && waitingPlayer == null) return;
+        if (!isPlaying && mediaPlayer == null && introPlayer == null
+                && waitingPlayer == null && offlinePlayer == null) return;
 
         broadcastState(false, null, "Quiet hours started. Playback paused until 6:00 AM");
         updateNotification("Quiet hours", currentUrl);
@@ -1346,6 +1362,7 @@ public class RadioService extends Service {
         streamPrepared = false;
         webFallbackStarted = false;
         isPlaying = false;
+        startForeground(NOTIF_ID, buildNotification("Offline backup playing", currentUrl));
         broadcastState(true, null, reason);
         updateNotification("Offline backup playing", currentUrl);
         logWarn("startOfflineFallback reason=" + reason + " lastRequestedUrl=" + lastRequestedUrl);
@@ -1357,6 +1374,11 @@ public class RadioService extends Service {
             }
             setPlayerAudioMode(offlinePlayer);
             offlinePlayer.setLooping(true);
+            offlinePlayer.setOnErrorListener((mp, what, extra) -> {
+                logError("Offline fallback player error what=" + what + " extra=" + extra, null);
+                stopOfflineFallback(false);
+                return true;
+            });
             requestAudioFocus();
             offlinePlayer.start();
             isPlaying = true;
@@ -1381,6 +1403,16 @@ public class RadioService extends Service {
         offlineMode = false;
         isPlaying = false;
         if (resumeRadio && lastRequestedUrl != null && !lastRequestedUrl.trim().isEmpty()) {
+            if (urlManager != null && !urlManager.isAppEnabled()) {
+                logInfo("App disabled; not resuming radio after reconnect");
+                stopSelf();
+                return;
+            }
+            if (isQuietHoursNow()) {
+                logInfo("Quiet hours active; not resuming radio after reconnect");
+                stopSelf();
+                return;
+            }
             logInfo("Resuming radio after reconnect url=" + lastRequestedUrl);
             failoverAttempts = 0;
             playbackRequestId++;

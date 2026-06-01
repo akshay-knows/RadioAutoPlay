@@ -44,6 +44,10 @@ public class ChargerReceiver extends BroadcastReceiver {
         StreamUrlManager mgr = new StreamUrlManager(context);
 
         if (Intent.ACTION_POWER_CONNECTED.equals(action)) {
+            if (!mgr.isAppEnabled()) {
+                Log.d(TAG, "Radio AutoPlay is disabled – skipping charger autoplay.");
+                return;
+            }
             if (mgr.isEmpty()) {
                 Log.w(TAG, "No stream URLs saved – skipping autoplay.");
                 return;

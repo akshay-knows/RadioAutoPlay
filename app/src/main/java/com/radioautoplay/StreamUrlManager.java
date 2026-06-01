@@ -19,6 +19,7 @@ public class StreamUrlManager {
     private static final String PREF_NAME       = "radio_prefs";
     private static final String KEY_URLS         = "stream_urls";
     private static final String KEY_ACTIVE_IDX   = "active_index";
+    private static final String KEY_APP_ENABLED  = "app_enabled";
     private static final String KEY_SHUFFLE      = "shuffle_mode";
     private static final String KEY_QUIET_HOURS  = "quiet_hours_enabled";
     private static final String KEY_DEFAULTS_ADDED = "default_streams_added";
@@ -239,6 +240,14 @@ public class StreamUrlManager {
 
     public void setShuffleEnabled(boolean enabled) {
         prefs.edit().putBoolean(KEY_SHUFFLE, enabled).apply();
+    }
+
+    public boolean isAppEnabled() {
+        return prefs.getBoolean(KEY_APP_ENABLED, true);
+    }
+
+    public void setAppEnabled(boolean enabled) {
+        prefs.edit().putBoolean(KEY_APP_ENABLED, enabled).apply();
     }
 
     public boolean isQuietHoursEnabled() {

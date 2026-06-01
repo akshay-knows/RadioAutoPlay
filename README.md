@@ -2,7 +2,7 @@
 
 An Android app for turning a spare phone into a charger-triggered radio player.
 
-Plug the phone into power and Radio AutoPlay waits 10 seconds, plays a random intro sound, opens a saved webpage radio station, and starts music automatically. Unplug power and it stops cleanly.
+Plug the phone into power and Radio AutoPlay waits 2 seconds, plays a random intro sound, opens a saved webpage radio station, and starts music automatically. Unplug power and it stops cleanly.
 
 It was built for a simple but fun setup: a spare Android phone, speakers, and a bathroom light switch or charger connection that makes the room come alive when power turns on.
 
@@ -23,7 +23,7 @@ It was built for a simple but fun setup: a spare Android phone, speakers, and a 
 |---|---|
 | Charger autoplay | Starts playback when Android reports charger/power connected |
 | Auto stop | Stops playback when charger/power is disconnected |
-| 10-second start delay | Gives the phone/network a moment before the intro and station start |
+| 2-second start delay | Gives the phone/network a moment before the intro and station start |
 | Random intro sounds | Plays one bundled or custom intro sound before the station |
 | Webpage station mode | Opens saved radio webpages in a hidden WebView, similar to a browser |
 | OnlineRadioBox support | Clicks/starts OnlineRadioBox-style webpage players automatically |
@@ -38,14 +38,14 @@ It was built for a simple but fun setup: a spare Android phone, speakers, and a 
 
 ## Latest Version
 
-Current app version: **v1.7**
+Current app version: **v1.8**
 
 Download the latest APK from [GitHub Releases](https://github.com/akshay-knows/RadioAutoPlay/releases/latest).
 
-The v1.7 APK is also archived here:
+The v1.8 APK is also archived here:
 
 ```text
-apk-releases/v1.7/RadioAutoPlay-v1.7.apk
+apk-releases/v1.8/RadioAutoPlay-v1.8.apk
 ```
 
 ## How It Works
@@ -57,7 +57,7 @@ Charger connected
 ChargerReceiver starts RadioService
       |
       v
-10-second delay
+2-second delay
       |
       v
 Random intro sound
