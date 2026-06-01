@@ -454,7 +454,6 @@ public class RadioService extends Service {
         String station = currentUrl != null && !currentUrl.startsWith("http") ? currentUrl : getStationName(pageUrl);
         broadcastState(true, null, "Playing web player");
         updateNotification("Playing web player", station);
-        speakVoiceAlert("Music is playing now.", null);
     }
 
     private void stopPlayback() {
@@ -578,7 +577,7 @@ public class RadioService extends Service {
         stopWaitingLoop();
         releaseIntroPlayerOnly();
         requestAudioFocus();
-        speakVoiceAlert("Music is playing now.", () -> startPreparedStreamAfterAnnouncement(requestId));
+        startPreparedStreamAfterAnnouncement(requestId);
     }
 
     private void startPreparedStreamAfterAnnouncement(int requestId) {

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Radio AutoPlay</string>
-    <string name="changelog_v1_1">v1.3\n- In-app update prompt downloads and opens new APK installs directly\n- Check for Updates button added inside the app\n- Stable app signing keeps future APK updates compatible\n- Generic music-start announcement, without reading link names\n- Webpage station mode and 17-second failover retained\n- Quiet hours from 12:00 AM to 6:00 AM</string>
+    <string name="changelog_v1_1">v1.4\n- Removed the music-start voice announcement so playback is not interrupted\n- In-app updater retained for future APK installs\n- Stable app signing keeps future APK updates compatible\n- Webpage station mode and 17-second failover retained\n- Quiet hours from 12:00 AM to 6:00 AM</string>
 </resources>

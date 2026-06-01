@@ -72,7 +72,7 @@ The APK will be at `app/build/outputs/apk/debug/app-debug.apk`.
 Built APKs are also archived by version under:
 
 ```text
-apk-releases/v1.3/RadioAutoPlay-v1.3.apk
+apk-releases/v1.4/RadioAutoPlay-v1.4.apk
 ```
 
 ### Updating an installed APK
@@ -80,7 +80,7 @@ apk-releases/v1.3/RadioAutoPlay-v1.3.apk
 Android only allows an app update when the package name, signing certificate, and version code are valid:
 
 - Package name stays `com.radioautoplay`
-- Version code is now `4`
+- Version code is now `5`
 - From v1.2 onward, debug and release APKs are signed with the bundled `app/radioautoplay-upload.jks`
 
 If your currently installed APK was signed by Android Studio's old debug key or a GitHub runner key, Android may show an update/install conflict once. In that case, uninstall the old app one time, install v1.2, and future APKs built from this repo should update normally.
