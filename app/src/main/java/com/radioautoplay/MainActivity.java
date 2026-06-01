@@ -35,6 +35,7 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
 
     private StreamUrlManager urlManager;
+    private IntroSoundManager introSoundManager;
     private UrlAdapter        adapter;
     private List<String>      urlList;
 
@@ -50,6 +51,10 @@ public class MainActivity extends AppCompatActivity {
     private final ActivityResultLauncher<String[]> csvPickerLauncher =
             registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
                 if (uri != null) importCsv(uri);
+            });
+    private final ActivityResultLauncher<String[]> introSoundPickerLauncher =
+            registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+                if (uri != null) addIntroSound(uri);
             });
 
     private final ActivityResultLauncher<String> notificationPermissionLauncher =
@@ -84,6 +89,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         urlManager = new StreamUrlManager(this);
+        introSoundManager = new IntroSoundManager(this);
 
         bindViews();
         setupRecyclerView();
@@ -158,6 +164,8 @@ public class MainActivity extends AppCompatActivity {
         // Add URL button
         findViewById(R.id.btn_add).setOnClickListener(v -> addUrl());
         findViewById(R.id.btn_import_csv).setOnClickListener(v -> openCsvPicker());
+        findViewById(R.id.btn_add_intro).setOnClickListener(v -> openIntroSoundPicker());
+        findViewById(R.id.btn_clear_intro).setOnClickListener(v -> clearIntroSounds());
 
         // Play / Stop button
         btnPlayStop.setOnClickListener(v -> {
@@ -239,6 +247,40 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             Toast.makeText(this, "Could not import CSV: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
+    }
+
+    private void openIntroSoundPicker() {
+        introSoundPickerLauncher.launch(new String[] {
+                "audio/*",
+                "application/octet-stream"
+        });
+    }
+
+    private void addIntroSound(Uri uri) {
+        try {
+            final int flags = Intent.FLAG_GRANT_READ_URI_PERMISSION;
+            getContentResolver().takePersistableUriPermission(uri, flags);
+        } catch (Exception ignored) {
+            // Some providers do not offer persistable permissions; keep the URI if it still opens now.
+        }
+
+        boolean added = introSoundManager.addIntroUri(uri);
+        Toast.makeText(this,
+                added ? "Intro sound added. Saved intros: " + introSoundManager.getCount()
+                        : "That intro sound is already saved.",
+                Toast.LENGTH_LONG).show();
+    }
+
+    private void clearIntroSounds() {
+        new AlertDialog.Builder(this)
+                .setTitle("Clear custom intro sounds?")
+                .setMessage("The bundled intro will still play when no custom intro is saved.")
+                .setPositiveButton("Clear", (d, w) -> {
+                    introSoundManager.clearIntroUris();
+                    Toast.makeText(this, "Custom intro sounds cleared.", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private List<String> readStreamUrlsFromCsv(Uri uri) throws Exception {

@@ -5,19 +5,26 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.res.AssetFileDescriptor;
+import android.media.AudioFocusRequest;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.speech.tts.TextToSpeech;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
@@ -28,6 +35,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Calendar;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -46,6 +54,8 @@ public class RadioService extends Service {
     private static final int    NOTIF_ID     = 1;
     private static final long   STREAM_START_TIMEOUT_MS = 60_000L;
     private static final long   INTRO_DELAY_MS = 5_000L;
+    private static final long   STATUS_CHECK_INTERVAL_MS = 60_000L;
+    private static final int    LOW_BATTERY_PERCENT = 20;
 
     public static final String ACTION_PLAY   = "com.radioautoplay.PLAY";
     public static final String ACTION_STOP   = "com.radioautoplay.STOP";
@@ -63,15 +73,34 @@ public class RadioService extends Service {
     private PowerManager.WakeLock wakeLock;
     private WifiManager.WifiLock  wifiLock;
     private StreamUrlManager urlManager;
+    private IntroSoundManager introSoundManager;
     private Handler handler;
     private AudioManager audioManager;
+    private TextToSpeech textToSpeech;
     private String currentUrl;
     private Runnable introStartDelay;
     private Runnable streamStartTimeout;
+    private Runnable statusCheckRunnable;
     private boolean isPlaying = false;
+    private boolean ttsReady = false;
+    private boolean networkWasConnected = true;
+    private boolean lowBatteryAnnounced = false;
     private int failoverAttempts = 0;
     private int playbackRequestId = 0;
+    private int lastTimeAnnouncementKey = -1;
     private final AudioManager.OnAudioFocusChangeListener audioFocusChangeListener = focusChange -> { };
+    private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent == null || intent.getAction() == null) return;
+            if (ConnectivityManager.CONNECTIVITY_ACTION.equals(intent.getAction())) {
+                handleNetworkStatus();
+            } else if (Intent.ACTION_BATTERY_LOW.equals(intent.getAction())
+                    || Intent.ACTION_BATTERY_CHANGED.equals(intent.getAction())) {
+                handleBatteryStatus(intent);
+            }
+        }
+    };
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -80,9 +109,13 @@ public class RadioService extends Service {
         super.onCreate();
         handler = new Handler(Looper.getMainLooper());
         urlManager = new StreamUrlManager(this);
+        introSoundManager = new IntroSoundManager(this);
         audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
         createNotificationChannel();
         acquireLocks();
+        initTextToSpeech();
+        registerStatusReceiver();
+        startStatusAnnouncements();
     }
 
     @Override
@@ -111,6 +144,11 @@ public class RadioService extends Service {
     @Override
     public void onDestroy() {
         stopPlayback(false);
+        unregisterStatusReceiver();
+        if (textToSpeech != null) {
+            textToSpeech.shutdown();
+            textToSpeech = null;
+        }
         releaseLocks();
         super.onDestroy();
     }
@@ -138,32 +176,17 @@ public class RadioService extends Service {
             introPlayer = new MediaPlayer();
             setPlayerAudioMode(introPlayer);
             introPlayer.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
-            AssetFileDescriptor afd = getResources().openRawResourceFd(R.raw.initializing_system);
-            if (afd == null) {
-                Log.w(TAG, "Intro theme resource was not found; starting stream.");
-                releaseIntroPlayerOnly();
-                startPlayback(url, requestId);
-                return;
-            }
-            try {
-                introPlayer.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
-            } finally {
-                try {
-                    afd.close();
-                } catch (IOException e) {
-                    Log.w(TAG, "Could not close intro asset", e);
-                }
-            }
+            setIntroDataSource(introPlayer);
             introPlayer.setOnCompletionListener(mp -> {
                 if (requestId != playbackRequestId) return;
                 releaseIntroPlayerOnly();
-                startPlayback(url, requestId);
+                playThinkingBridgeThenStart(url, requestId);
             });
             introPlayer.setOnErrorListener((mp, what, extra) -> {
                 Log.e(TAG, "Intro theme error: " + what + ", " + extra);
                 if (requestId == playbackRequestId) {
                     releaseIntroPlayerOnly();
-                    startPlayback(url, requestId);
+                    playThinkingBridgeThenStart(url, requestId);
                 }
                 return true;
             });
@@ -177,8 +200,40 @@ public class RadioService extends Service {
         } catch (Exception e) {
             Log.e(TAG, "Error playing intro theme", e);
             releaseIntroPlayerOnly();
-            startPlayback(url, requestId);
+            playThinkingBridgeThenStart(url, requestId);
         }
+    }
+
+    private void setIntroDataSource(MediaPlayer player) throws IOException {
+        Uri customIntro = introSoundManager.getRandomIntroUri();
+        if (customIntro != null) {
+            try {
+                player.setDataSource(getApplicationContext(), customIntro);
+                Log.d(TAG, "Playing custom intro sound: " + customIntro);
+                return;
+            } catch (Exception e) {
+                Log.w(TAG, "Custom intro could not be opened. Falling back to bundled intro.", e);
+            }
+        }
+
+        AssetFileDescriptor afd = getResources().openRawResourceFd(R.raw.initializing_system);
+        if (afd == null) throw new IOException("Bundled intro theme resource was not found");
+        try {
+            player.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
+        } finally {
+            try {
+                afd.close();
+            } catch (IOException e) {
+                Log.w(TAG, "Could not close intro asset", e);
+            }
+        }
+    }
+
+    private void playThinkingBridgeThenStart(String url, int requestId) {
+        if (requestId != playbackRequestId) return;
+        broadcastState(false, null, "Tuning station");
+        updateNotification("Tuning station", url);
+        speakVoiceAlert("Tuning your radio station. Please wait.", () -> startPlayback(url, requestId));
     }
 
     private void startPlayback(String url, int requestId) {
@@ -225,6 +280,7 @@ public class RadioService extends Service {
                 isPlaying = true;
                 broadcastState(true, null);
                 updateNotification("Playing", currentUrl);
+                speakVoiceAlert("Now playing " + getStationName(currentUrl), null);
                 Log.d(TAG, "Playback started");
             });
 
@@ -288,6 +344,7 @@ public class RadioService extends Service {
         if (urls.size() <= 1) {
             broadcastState(false, reason + ". No backup stream is saved.");
             updateNotification("No backup stream", currentUrl);
+            speakVoiceAlert(reason + ". No backup stream is saved.", null);
             stopSelf();
             return;
         }
@@ -296,6 +353,7 @@ public class RadioService extends Service {
         if (failoverAttempts >= urls.size()) {
             broadcastState(false, "All saved streams failed to start.");
             updateNotification("All streams failed", currentUrl);
+            speakVoiceAlert("Unable to play stream. All saved streams failed to start.", null);
             stopSelf();
             return;
         }
@@ -304,6 +362,7 @@ public class RadioService extends Service {
         if (nextUrl == null || nextUrl.equals(currentUrl)) {
             broadcastState(false, "No different backup stream is available.");
             updateNotification("No backup stream", currentUrl);
+            speakVoiceAlert("Unable to play stream. No different backup stream is available.", null);
             stopSelf();
             return;
         }
@@ -312,6 +371,7 @@ public class RadioService extends Service {
         currentUrl = nextUrl;
         broadcastState(false, null, reason + ". Trying another stream");
         updateNotification("Trying backup stream", nextUrl);
+        speakVoiceAlert(reason + ". Trying another stream.", null);
         startPlayback(nextUrl, playbackRequestId);
     }
 
@@ -467,6 +527,194 @@ public class RadioService extends Service {
         audioManager.abandonAudioFocus(audioFocusChangeListener);
     }
 
+    // ── Voice announcements ──────────────────────────────────────────────────
+
+    private void initTextToSpeech() {
+        textToSpeech = new TextToSpeech(getApplicationContext(), status -> {
+            if (status == TextToSpeech.SUCCESS && textToSpeech != null) {
+                int result = textToSpeech.setLanguage(Locale.US);
+                ttsReady = result != TextToSpeech.LANG_MISSING_DATA
+                        && result != TextToSpeech.LANG_NOT_SUPPORTED;
+                textToSpeech.setSpeechRate(0.92f);
+                textToSpeech.setPitch(1.02f);
+            } else {
+                ttsReady = false;
+                Log.w(TAG, "TextToSpeech initialization failed");
+            }
+        });
+    }
+
+    private void speakVoiceAlert(String message, Runnable afterDone) {
+        if (!ttsReady || textToSpeech == null || message == null || message.trim().isEmpty()) {
+            if (afterDone != null) handler.post(afterDone);
+            return;
+        }
+
+        final boolean[] finished = {false};
+        if (afterDone != null) {
+            handler.postDelayed(() -> {
+                if (!finished[0]) {
+                    finished[0] = true;
+                    restoreMusicVolume();
+                    afterDone.run();
+                }
+            }, 8_000L);
+        }
+
+        if (mediaPlayer != null && isPlaying) {
+            try {
+                mediaPlayer.setVolume(0.28f, 0.28f);
+            } catch (Exception e) {
+                Log.w(TAG, "Could not duck stream for announcement", e);
+            }
+        }
+
+        String utteranceId = "voice_" + System.currentTimeMillis();
+        textToSpeech.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
+            @Override
+            public void onStart(String id) { }
+
+            @Override
+            public void onDone(String id) {
+                handler.post(() -> {
+                    if (finished[0]) return;
+                    finished[0] = true;
+                    restoreMusicVolume();
+                    if (afterDone != null) {
+                        afterDone.run();
+                    }
+                });
+            }
+
+            @Override
+            public void onError(String id) {
+                handler.post(() -> {
+                    if (finished[0]) return;
+                    finished[0] = true;
+                    restoreMusicVolume();
+                    if (afterDone != null) {
+                        afterDone.run();
+                    }
+                });
+            }
+        });
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            android.os.Bundle params = new android.os.Bundle();
+            textToSpeech.speak(message, TextToSpeech.QUEUE_ADD, params, utteranceId);
+        } else {
+            java.util.HashMap<String, String> params = new java.util.HashMap<>();
+            params.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId);
+            //noinspection deprecation
+            textToSpeech.speak(message, TextToSpeech.QUEUE_ADD, params);
+        }
+    }
+
+    private void restoreMusicVolume() {
+        if (mediaPlayer != null && isPlaying) {
+            try {
+                mediaPlayer.setVolume(1f, 1f);
+            } catch (Exception e) {
+                Log.w(TAG, "Could not restore stream volume", e);
+            }
+        }
+    }
+
+    private void startStatusAnnouncements() {
+        statusCheckRunnable = new Runnable() {
+            @Override
+            public void run() {
+                announceTimeIfNeeded();
+                handleNetworkStatus();
+                Intent battery = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+                if (battery != null) handleBatteryStatus(battery);
+                handler.postDelayed(this, STATUS_CHECK_INTERVAL_MS);
+            }
+        };
+        handler.postDelayed(statusCheckRunnable, STATUS_CHECK_INTERVAL_MS);
+    }
+
+    private void announceTimeIfNeeded() {
+        if (!isPlaying) return;
+        Calendar calendar = Calendar.getInstance();
+        int minute = calendar.get(Calendar.MINUTE);
+        if (minute != 0 && minute != 30) return;
+
+        int key = calendar.get(Calendar.DAY_OF_YEAR) * 10000
+                + calendar.get(Calendar.HOUR_OF_DAY) * 100
+                + minute;
+        if (key == lastTimeAnnouncementKey) return;
+        lastTimeAnnouncementKey = key;
+
+        String hourText = String.format(Locale.US, "%d:%02d",
+                calendar.get(Calendar.HOUR), minute);
+        if (hourText.startsWith("0:")) {
+            hourText = "12:" + hourText.substring(2);
+        }
+        speakVoiceAlert("The time is " + hourText + ".", null);
+    }
+
+    private void registerStatusReceiver() {
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
+        filter.addAction(Intent.ACTION_BATTERY_LOW);
+        filter.addAction(Intent.ACTION_BATTERY_CHANGED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(statusReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(statusReceiver, filter);
+        }
+    }
+
+    private void unregisterStatusReceiver() {
+        if (handler != null && statusCheckRunnable != null) {
+            handler.removeCallbacks(statusCheckRunnable);
+            statusCheckRunnable = null;
+        }
+        try {
+            unregisterReceiver(statusReceiver);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void handleNetworkStatus() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        NetworkInfo info = cm != null ? cm.getActiveNetworkInfo() : null;
+        boolean connected = info != null && info.isConnected();
+        if (networkWasConnected && !connected) {
+            speakVoiceAlert("Network disconnected. Wi Fi or mobile data is not working.", null);
+        } else if (!networkWasConnected && connected) {
+            speakVoiceAlert("Network is connected again.", null);
+        }
+        networkWasConnected = connected;
+    }
+
+    private void handleBatteryStatus(Intent intent) {
+        int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+        int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+        if (level < 0 || scale <= 0) return;
+
+        int percent = Math.round(level * 100f / scale);
+        if (percent <= LOW_BATTERY_PERCENT && !lowBatteryAnnounced) {
+            lowBatteryAnnounced = true;
+            speakVoiceAlert("Battery low. Battery is " + percent + " percent.", null);
+        } else if (percent > LOW_BATTERY_PERCENT + 5) {
+            lowBatteryAnnounced = false;
+        }
+    }
+
+    private String getStationName(String url) {
+        if (url == null || url.isEmpty()) return "your radio station";
+        try {
+            Uri uri = Uri.parse(url);
+            String host = uri.getHost();
+            if (host == null || host.isEmpty()) return "your radio station";
+            return host.replace("www.", "").replace(".", " dot ");
+        } catch (Exception e) {
+            return "your radio station";
+        }
+    }
+
     // ── Locks ─────────────────────────────────────────────────────────────────
 
     private void acquireLocks() {
@@ -539,6 +787,7 @@ public class RadioService extends Service {
 
     private void broadcastState(boolean playing, String error, String status) {
         Intent i = new Intent(BROADCAST_STATE);
+        i.setPackage(getPackageName());
         i.putExtra(EXTRA_PLAYING, playing);
         i.putExtra(EXTRA_URL_NOW, currentUrl != null ? currentUrl : "");
         if (error != null) i.putExtra(EXTRA_ERROR, error);

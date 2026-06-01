@@ -11,9 +11,11 @@ An Android app that **automatically starts playing a radio/audio stream when you
 | **Auto-play on charge** | Detects `ACTION_POWER_CONNECTED` and starts the bathroom audio sequence |
 | **Auto-stop on unplug** | Detects `ACTION_POWER_DISCONNECTED` and stops cleanly |
 | **Lock-screen charger monitor** | Runs a small foreground monitor so charger events keep working while the phone is locked |
+| **Animated splash screen** | Shows a quick animated launch screen before the main controls |
 | **Shuffle mode** | Picks a random saved stream every time you plug in |
 | **Sequential mode** | Cycles through your streams in order |
-| **Bathroom intro theme** | Waits 5 seconds, plays the bundled intro MP3, then starts the radio |
+| **Multiple intro sounds** | Pick custom intro audio files; the app chooses one randomly before starting music |
+| **Voice announcements** | Announces time every hour/half-hour, stream failures, network loss, low battery, and the current station |
 | **Stream failover watchdog** | If a stream errors or does not start within 1 minute, the app automatically tries another saved stream |
 | **HTML player link support** | If a station returns a simple browser player page, the app extracts `<audio>`, `<video>`, or `<source>` media URLs and retries with audio-friendly headers |
 | **Manage stream URLs** | Add, play, or remove any number of stream URLs |
