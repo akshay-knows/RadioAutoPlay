@@ -395,7 +395,9 @@ public class RadioService extends Service {
                 @Override
                 public void onPageFinished(WebView view, String pageUrl) {
                     if (requestId != playbackRequestId) return;
-                    startWebAutoplayNow(view, pageUrl, requestId);
+                    String targetUrl = activePlaybackUrl != null && !activePlaybackUrl.trim().isEmpty()
+                            ? activePlaybackUrl : pageUrl;
+                    startWebAutoplayNow(view, targetUrl, requestId);
                 }
 
                 @Override
@@ -471,7 +473,7 @@ public class RadioService extends Service {
                 + "function playMedia(m){if(!m)return false;try{stopOthers(m);m.muted=false;m.autoplay=true;m.controls=true;m.volume=targetVolume;var p=m.play&&m.play();if(p&&p.then)p.then(function(){window.radioAutoPlayStarted=true;log('media playing');}).catch(function(e){log('play rejected '+e);});return true;}catch(e){log('playMedia error '+e);return false;}}"
                 + "function clickTarget(e){if(!e)return;try{e.click();}catch(x){}try{e.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));}catch(x){}var p=e.closest&&e.closest('button,a,[role=button],.station_play,.b-play,.button-play');if(p&&p!==e){try{p.click();}catch(x){}}}"
                 + "function playExisting(){var media=allMedia().filter(function(m){try{return m.id!=='radioautoplay_audio'&&(m.src||m.currentSrc||m.querySelector('source[src]'));}catch(e){return false;}});return playMedia(media[0]);}"
-                + "function start(){if(window.radioAutoPlayStarted||alreadyPlaying()){window.radioAutoPlayStarted=true;return;}var target=findTarget();var src=streamOf(target);clickTarget(target);setTimeout(playExisting,350);setTimeout(function(){if(!alreadyPlaying()&&src){log('using stream '+src);playMedia(ownedAudio(src));}},1400);}"
+                + "function start(){if(window.radioAutoPlayStarted||alreadyPlaying()){window.radioAutoPlayStarted=true;return;}var target=findTarget();var src=streamOf(target);if(targetCode&&src){log('onlineradiobox stream '+src);playMedia(ownedAudio(src));return;}clickTarget(target);setTimeout(playExisting,350);setTimeout(function(){if(!alreadyPlaying()&&src){log('using stream '+src);playMedia(ownedAudio(src));}},1400);}"
                 + "start();"
                 + "setTimeout(start,1500);"
                 + "setTimeout(start,3500);"

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Radio AutoPlay</string>
-    <string name="changelog_v1_1">v1.17\n- Starts webpage playback only after the intro finishes\n- Removed intro-time WebView preload and mute/reuse behavior\n- Uses a simpler browser-like page play click before falling back to direct page stream audio\n- Keeps one WebView and one station active to avoid overlapping or stopping links</string>
+    <string name="changelog_v1_1">v1.18\n- Fixes OnlineRadioBox station startup by keeping the original cs station id after page load\n- OnlineRadioBox now uses the matching stream attribute directly when available\n- Keeps the simple intro-first, then webpage playback order\n- Leaves non-OnlineRadioBox playback behavior unchanged</string>
 </resources>
