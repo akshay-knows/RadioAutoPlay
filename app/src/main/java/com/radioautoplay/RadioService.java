@@ -379,7 +379,21 @@ public class RadioService extends Service {
                 return;
             }
             cancelStreamWatchdog();
-            startWebPageFallback(url, requestId, "Opening web station");
+            startForeground(NOTIF_ID, buildNotification("Resolving web station", url));
+            broadcastState(false, null, "Resolving web station");
+            new Thread(() -> {
+                StreamSource source = resolveStreamSource(url);
+                handler.post(() -> {
+                    if (requestId != playbackRequestId || isPlaying) return;
+                    if (isLikelyDirectStreamSource(url, source)) {
+                        logInfo("Resolved webpage station to direct stream requestId=" + requestId
+                                + " playUrl=" + source.playUrl + " displayUrl=" + source.displayUrl);
+                        openResolvedPlayback(source, requestId);
+                    } else {
+                        startWebPageFallback(url, requestId, "Opening web station");
+                    }
+                });
+            }, "WebStreamResolver").start();
             return;
         }
 
@@ -557,7 +571,7 @@ public class RadioService extends Service {
     private void startWebAutoplayNow(WebView view, String pageUrl, int requestId) {
         pendingWebRequestId = -1;
         pendingWebPageUrl = null;
-        injectAutoplayScript(view, pageUrl);
+        injectAutoplayScript(view, pageUrl, false);
         logInfo("Web autoplay start requestId=" + requestId + " pageUrl=" + pageUrl);
         handler.postDelayed(() -> verifyWebPlaybackStarted(pageUrl, requestId, 0), 2_500L);
     }
@@ -574,11 +588,12 @@ public class RadioService extends Service {
         }
     }
 
-    private void injectAutoplayScript(WebView view, String targetUrl) {
+    private void injectAutoplayScript(WebView view, String targetUrl, boolean allowPagePlayer) {
         String stationCode = jsString(extractOnlineRadioBoxStationCode(targetUrl));
         String script = "(function(){"
                 + "var targetVolume=" + NORMALIZED_STREAM_VOLUME + ";"
                 + "var targetCode='" + stationCode + "';"
+                + "var allowPagePlayer=" + allowPagePlayer + ";"
                 + "function allMedia(){return [].slice.call(document.querySelectorAll('audio,video'));}"
                 + "function stopOtherMedia(keep){allMedia().forEach(function(m){try{if(m!==keep){m.pause&&m.pause();m.muted=true;m.volume=0;}}catch(e){}});}"
                 + "function attrs(e){var s='';try{s+=(e.id||'')+' '+(e.className||'')+' '+(e.href||'')+' '+(e.getAttribute('stream')||'')+' '+(e.getAttribute('data-stream')||'')+' '+(e.getAttribute('data-src')||'')+' '+(e.getAttribute('onclick')||'')+' '+(e.getAttribute('aria-label')||'')+' '+(e.title||'')+' '+((e.parentElement&&(e.parentElement.innerText||e.parentElement.getAttribute('href')||''))||'');}catch(e){}return s.toLowerCase();}"
@@ -587,7 +602,8 @@ public class RadioService extends Service {
                 + "return document.getElementById('set_radio_button')||candidates.find(function(e){return attrs(e).indexOf('play')>=0||attrs(e).indexOf('listen')>=0||attrs(e).indexOf('start')>=0;})||document.querySelector('[stream],[data-stream],[data-src]');}"
                 + "function streamOf(e){if(!e)return '';return e.getAttribute('stream')||e.getAttribute('data-stream')||e.getAttribute('data-src')||'';}"
                 + "function ownedAudio(src){var a=document.getElementById('radioautoplay_audio');if(!a){a=document.createElement('audio');a.id='radioautoplay_audio';a.controls=true;a.preload='auto';a.style.position='fixed';a.style.left='0';a.style.bottom='0';a.style.width='1px';a.style.height='1px';document.body.appendChild(a);}if(src&&a.src!==src){a.src=src;}return a;}"
-                + "function playOne(){var target=findTarget();var src=streamOf(target);stopOtherMedia(null);if(target&&!src){try{target.click();}catch(e){}}"
+                + "function removeOwned(){var a=document.getElementById('radioautoplay_audio');if(a){try{a.pause();a.muted=true;a.volume=0;a.remove();}catch(e){}}}"
+                + "function playOne(){var target=findTarget();var src=streamOf(target);stopOtherMedia(null);if(allowPagePlayer){removeOwned();if(target){try{target.click();}catch(e){}}setTimeout(function(){var media=allMedia().filter(function(m){try{return !m.paused&&!m.ended;}catch(e){return false;}});var keep=media[0]||null;stopOtherMedia(keep);if(keep){try{keep.muted=false;keep.volume=targetVolume;}catch(e){}}},1500);return;}if(target&&!src){try{target.click();}catch(e){}}"
                 + "var owned=src?ownedAudio(src):document.getElementById('radioautoplay_audio');"
                 + "if(owned){try{stopOtherMedia(owned);owned.muted=false;owned.autoplay=true;owned.volume=targetVolume;owned.play&&owned.play();return;}catch(e){}}"
                 + "var media=allMedia().filter(function(m){try{return m.id!=='radioautoplay_audio'&&(m.src||m.currentSrc||m.querySelector('source'));}catch(e){return false;}});"
@@ -624,7 +640,7 @@ public class RadioService extends Service {
                     + " attempt=" + attempt + " playing=" + playing + " mediaCount=" + mediaCount
                     + " payload=" + result);
             if (!playing && attempt < WEB_AUTOPLAY_PROBE_ATTEMPTS) {
-                injectAutoplayScript(webViewPlayer, pageUrl);
+                injectAutoplayScript(webViewPlayer, pageUrl, attempt >= 2);
                 handler.postDelayed(() -> verifyWebPlaybackStarted(pageUrl, requestId, attempt + 1), 1_500L);
                 return;
             }
@@ -647,7 +663,7 @@ public class RadioService extends Service {
                 // Do not auto-skip web station on timeout; keep attempting autoplay in-place.
                 logWarn("Web station start still pending after timeout; keeping current station. pageUrl=" + pageUrl);
                 if (webViewPlayer != null) {
-                    injectAutoplayScript(webViewPlayer, pageUrl);
+                    injectAutoplayScript(webViewPlayer, pageUrl, true);
                 }
                 handler.postDelayed(() -> resetStreamWatchdogForWebPlayback(requestId, pageUrl),
                         WEB_POST_LOAD_START_TIMEOUT_MS);
@@ -731,7 +747,8 @@ public class RadioService extends Service {
                         webSilentChecks = 0;
                         webNoMediaChecks = 0;
                     } else {
-                        injectAutoplayScript(webViewPlayer, activePlaybackUrl != null ? activePlaybackUrl : currentUrl);
+                        injectAutoplayScript(webViewPlayer,
+                                activePlaybackUrl != null ? activePlaybackUrl : currentUrl, true);
                         if (mediaCount > 0) {
                             webSilentChecks++;
                         } else {
@@ -948,6 +965,11 @@ public class RadioService extends Service {
     private String extractMediaSourceUrl(String baseUrl, String html) {
         if (html == null || html.isEmpty()) return null;
 
+        String onlineRadioBoxStream = extractOnlineRadioBoxStream(baseUrl, html);
+        if (onlineRadioBoxStream != null) {
+            return onlineRadioBoxStream;
+        }
+
         Pattern mediaSourcePattern = Pattern.compile(
                 "(?i)<(?:audio|video|source)[^>]+src\\s*=\\s*['\"]([^'\"]+)['\"]");
         Matcher matcher = mediaSourcePattern.matcher(html);
@@ -975,6 +997,30 @@ public class RadioService extends Service {
         Pattern relativeUrlPattern = Pattern.compile(
                 "(?i)['\"]([^'\"]*(?:mp3|aac|m3u8|stream|icecast\\.audio|/proxy/)[^'\"]*)['\"]");
         matcher = relativeUrlPattern.matcher(html);
+        if (matcher.find()) {
+            return resolveHtmlUrl(baseUrl, matcher.group(1));
+        }
+
+        return null;
+    }
+
+    private String extractOnlineRadioBoxStream(String baseUrl, String html) {
+        String stationCode = extractOnlineRadioBoxStationCode(baseUrl);
+        if (stationCode.isEmpty()) return null;
+
+        String quotedCode = Pattern.quote(stationCode);
+        Pattern radioIdThenStream = Pattern.compile(
+                "(?is)<[^>]+radioId\\s*=\\s*['\"]" + quotedCode
+                        + "['\"][^>]+stream\\s*=\\s*['\"]([^'\"]+)['\"]");
+        Matcher matcher = radioIdThenStream.matcher(html);
+        if (matcher.find()) {
+            return resolveHtmlUrl(baseUrl, matcher.group(1));
+        }
+
+        Pattern streamThenRadioId = Pattern.compile(
+                "(?is)<[^>]+stream\\s*=\\s*['\"]([^'\"]+)['\"][^>]+radioId\\s*=\\s*['\"]"
+                        + quotedCode + "['\"]");
+        matcher = streamThenRadioId.matcher(html);
         if (matcher.find()) {
             return resolveHtmlUrl(baseUrl, matcher.group(1));
         }

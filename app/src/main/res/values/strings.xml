@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Radio AutoPlay</string>
-    <string name="changelog_v1_1">v1.11\n- Fixed duplicate WebView audio so one station cannot play over itself\n- Made the Now Playing panel show the active station link\n- Removed glitchy NDTV/AajTak defaults from random playback\n- Kept the dark button and visualizer update from v1.10</string>
+    <string name="changelog_v1_1">v1.12\n- Fixed Capital FM and Smooth Radio startup after the overlap fix\n- Resolves OnlineRadioBox pages to the exact station stream when available\n- Keeps WebView playback as a fallback without allowing duplicate audio\n- Shows the active station link in Now Playing</string>
 </resources>

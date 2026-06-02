@@ -38,14 +38,14 @@ It was built for a simple but fun setup: a spare Android phone, speakers, and a 
 
 ## Latest Version
 
-Current app version: **v1.11**
+Current app version: **v1.12**
 
 Download the latest APK from [GitHub Releases](https://github.com/akshay-knows/RadioAutoPlay/releases/latest).
 
-The v1.11 APK is also archived here after the release workflow finishes:
+The v1.12 APK is also archived here after the release workflow finishes:
 
 ```text
-apk-releases/v1.11/RadioAutoPlay-v1.11.apk
+apk-releases/v1.12/RadioAutoPlay-v1.12.apk
 ```
 
 ## How It Works
@@ -154,9 +154,9 @@ Android does not allow normal apps to silently update themselves, so the final i
 5. Push a matching tag:
 
 ```bash
-git tag -a v1.11 -m "Radio AutoPlay v1.11"
+git tag -a v1.12 -m "Radio AutoPlay v1.12"
 git push origin main
-git push origin v1.11
+git push origin v1.12
 ```
 
 The `Release APK` workflow builds the signed APK, archives it in the repo, and creates a GitHub Release.
