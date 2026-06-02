@@ -287,6 +287,72 @@ public class StreamUrlManager {
         return url != null && getWebUrls().contains(url);
     }
 
+    public static String getRadioNameForUrl(String url) {
+        String onlineRadioBoxName = getKnownOnlineRadioBoxName(url);
+        if (!onlineRadioBoxName.isEmpty()) return onlineRadioBoxName;
+
+        String onlineRadioBoxCode = getOnlineRadioBoxStationCode(url);
+        if (!onlineRadioBoxCode.isEmpty()) {
+            int dot = onlineRadioBoxCode.lastIndexOf('.');
+            String stationCode = dot >= 0 && dot < onlineRadioBoxCode.length() - 1
+                    ? onlineRadioBoxCode.substring(dot + 1) : onlineRadioBoxCode;
+            return titleCase(stationCode.replace("-", " ").replace("_", " "));
+        }
+
+        String slugName = getSlugStationName(url);
+        if (!slugName.isEmpty()) return slugName;
+
+        try {
+            Uri uri = Uri.parse(url);
+            String host = uri.getHost();
+            if (host == null || host.trim().isEmpty()) return "Radio station";
+            return titleCase(host.replace("www.", "").replace(".", " "));
+        } catch (Exception ignored) {
+            return "Radio station";
+        }
+    }
+
+    public static String getKnownDirectStreamForUrl(String url) {
+        String code = getOnlineRadioBoxStationCode(url);
+        if (code.isEmpty()) return "";
+        switch (code) {
+            case "ca.cbcrtoronto":
+                return "https://playerservices.streamtheworld.com/api/livestream-redirect/CBLAFM_CBC.mp3?dist=onlineradiobox";
+            case "in.aajtak":
+                return "https://tunein.cdnstream1.com/4530_128_2.mp3";
+            case "in.air":
+                return "https://air.pc.cdn.bitgravity.com/air/live/pbaudio163/playlist.m3u8";
+            case "in.easy60s":
+                return "https://streaming.exclusive.radio/uber/easy60/icecast.audio";
+            case "in.karanaujla":
+                return "https://stream.zeno.fm/vrqrkmrfkzzuv";
+            case "in.ndtv":
+                return "https://ndtv24x7elemarchana.akamaized.net/hls/live/2003678/ndtv24x7/ndtv24x7master.m3u8";
+            case "za.hindvaniradio":
+                return "https://edge.iono.fm/xice/129_medium.aac";
+            case "in.ndtvindia":
+                return "https://ndtvindiaelemarchana.akamaized.net/hls/live/2003679/ndtvindia/ndtvindiamaster.m3u8";
+            case "in.easy10s":
+                return "https://streaming.exclusive.radio/uber/easy2010/icecast.audio";
+            case "uk.capitalfmuk":
+                return "https://media-ssl.musicradio.com/Capital";
+            case "uk.lbc973fm":
+                return "https://media-ssl.musicradio.com/LBCLondon";
+            case "uk.smoothradio1022":
+                return "https://media-ssl.musicradio.com/SmoothLondonMP3";
+            case "us.npr":
+                return "https://npr-ice.streamguys1.com/live.mp3";
+            case "us.977comedy":
+                return "https://playerservices.streamtheworld.com/api/livestream-redirect/977_COMEDY_SC?dist=onlineradiobox";
+            case "us.977todayshits":
+                return "https://playerservices.streamtheworld.com/api/livestream-redirect/977_HITSAAC_SC?dist=onlineradiobox";
+            case "us.wbbr":
+                return "https://playerservices.streamtheworld.com/api/livestream-redirect/WBBRAMAAC.aac?dist=onlineradiobox";
+            default:
+                return "";
+        }
+    }
+
     public boolean isWebStationsDefault() {
         return prefs.getBoolean(KEY_WEB_STATIONS_DEFAULT, false);
     }
@@ -448,5 +514,96 @@ public class StreamUrlManager {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
         return normalized;
+    }
+
+    private static String getKnownOnlineRadioBoxName(String url) {
+        String code = getOnlineRadioBoxStationCode(url);
+        if (code.isEmpty()) return "";
+        switch (code) {
+            case "ca.cbcrtoronto":
+                return "CBC Radio One";
+            case "in.aajtak":
+                return "Aaj Tak Radio";
+            case "in.air":
+                return "AIR Patiala 100.2 FM";
+            case "in.easy60s":
+                return "Easy 60s";
+            case "in.karanaujla":
+                return "Karan Aujla Radio";
+            case "in.ndtv":
+                return "NDTV 24x7 Radio";
+            case "za.hindvaniradio":
+                return "Hindvani Radio";
+            case "in.ndtvindia":
+                return "NDTV India";
+            case "in.easy10s":
+                return "Easy 10s";
+            case "uk.capitalfmuk":
+                return "Capital FM";
+            case "uk.lbc973fm":
+                return "LBC";
+            case "uk.smoothradio1022":
+                return "Smooth Radio";
+            case "us.npr":
+                return "NPR Radio";
+            case "us.977comedy":
+                return ".977 Comedy";
+            case "us.977todayshits":
+                return ".977 Today's Hits";
+            case "us.wbbr":
+                return "Bloomberg Radio";
+            default:
+                return "";
+        }
+    }
+
+    private static String getOnlineRadioBoxStationCode(String url) {
+        if (url == null || url.trim().isEmpty()) return "";
+        try {
+            Uri uri = Uri.parse(url);
+            String host = uri.getHost();
+            if (host == null || !host.toLowerCase().contains("onlineradiobox.com")) {
+                return "";
+            }
+            String code = uri.getQueryParameter("cs");
+            return code != null ? code.trim().toLowerCase() : "";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private static String getSlugStationName(String url) {
+        if (url == null || url.trim().isEmpty()) return "";
+        try {
+            Uri uri = Uri.parse(url);
+            String host = uri.getHost();
+            if (host == null || !host.toLowerCase().contains("onlineradiofm.in")) {
+                return "";
+            }
+            List<String> segments = uri.getPathSegments();
+            if (segments.isEmpty()) return "";
+            String slug = segments.get(segments.size() - 1);
+            if (slug == null || slug.trim().isEmpty()) return "";
+            return titleCase(slug.replace("-", " "));
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private static String titleCase(String value) {
+        if (value == null || value.trim().isEmpty()) return "";
+        String[] parts = value.trim().replaceAll("\\s+", " ").split(" ");
+        StringBuilder result = new StringBuilder();
+        for (String part : parts) {
+            if (part.isEmpty()) continue;
+            if (result.length() > 0) result.append(' ');
+            if (part.length() <= 3 && part.equals(part.toLowerCase())) {
+                result.append(part.toUpperCase());
+            } else {
+                result.append(Character.toUpperCase(part.charAt(0)));
+                if (part.length() > 1) result.append(part.substring(1));
+            }
+        }
+        return result.toString();
     }
 }

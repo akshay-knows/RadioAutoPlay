@@ -30,18 +30,35 @@
             android:background="@drawable/bg_badge"
             android:layout_marginEnd="10dp" />
 
-        <!-- URL text -->
-        <TextView
-            android:id="@+id/tv_url"
+        <!-- Station name and URL -->
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="https://..."
-            android:textColor="@color/text_primary"
-            android:textSize="12sp"
-            android:ellipsize="middle"
-            android:maxLines="2"
-            android:layout_marginEnd="4dp" />
+            android:orientation="vertical"
+            android:layout_marginEnd="4dp">
+
+            <TextView
+                android:id="@+id/tv_station_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Station"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:ellipsize="end"
+                android:maxLines="1" />
+
+            <TextView
+                android:id="@+id/tv_url"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="https://..."
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp"
+                android:ellipsize="middle"
+                android:maxLines="2" />
+        </LinearLayout>
 
         <!-- Play button -->
         <ImageButton

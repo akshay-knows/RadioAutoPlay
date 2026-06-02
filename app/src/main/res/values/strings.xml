@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Radio AutoPlay</string>
-    <string name="changelog_v1_1">v1.13\n- Added a 40-second startup delay toggle\n- Added a Visualizer ON/OFF toggle\n- Fixed the visualizer animation so it runs during Starting and LIVE states\n- Kept station playback fixes from v1.12</string>
+    <string name="changelog_v1_1">v1.14\n- Fixed OnlineRadioBox playback by resolving verified direct audio streams first\n- Added startup announcements for Wi-Fi, time, battery, and selected station\n- Shows station names above saved links\n- Keeps offline backup audio isolated from startup announcements</string>
 </resources>

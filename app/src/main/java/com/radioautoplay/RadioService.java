@@ -42,7 +42,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -65,6 +67,7 @@ public class RadioService extends Service {
     private static final long   WEB_POST_LOAD_START_TIMEOUT_MS = 20_000L;
     private static final long   WEB_HEALTHCHECK_INTERVAL_MS = 15_000L;
     private static final int    WEB_AUTOPLAY_PROBE_ATTEMPTS = 20;
+    private static final int    MAX_HTML_SCAN_BYTES = 512 * 1024;
     private static final long   STATUS_CHECK_INTERVAL_MS = 60_000L;
     private static final int    LOW_BATTERY_PERCENT = 20;
     private static final int    QUIET_HOURS_START_HOUR = 0;
@@ -251,6 +254,9 @@ public class RadioService extends Service {
         broadcastState(false, null, delayStatus);
         logInfo("Delaying playback start by " + startDelayMs + "ms requestId="
                 + requestId + " url=" + url);
+        if (startDelayMs > 0) {
+            handler.postDelayed(() -> announceStartupStatus(url, requestId), 1_200L);
+        }
 
         introStartDelay = () -> {
             introStartDelay = null;
@@ -270,6 +276,7 @@ public class RadioService extends Service {
                 stopSelf();
                 return;
             }
+            stopVoiceAlert();
             startPlaybackAfterIntro(url, requestId);
         };
         if (startDelayMs > 0) {
@@ -431,7 +438,7 @@ public class RadioService extends Service {
         releaseMediaPlayerOnly();
         if (requestId != playbackRequestId) return;
 
-        currentUrl = source.displayUrl;
+        currentUrl = buildDisplayText(source.stationName, source.displayUrl);
         logInfo("openResolvedPlayback requestId=" + requestId + " source=" + source.playUrl);
         try {
             mediaPlayer = new MediaPlayer();
@@ -454,7 +461,7 @@ public class RadioService extends Service {
                 logError("MediaPlayer error requestId=" + requestId + " what=" + what + " extra=" + extra, null);
                 isPlaying = false;
                 if (requestId == playbackRequestId) {
-                    startWebPageFallback(currentUrl, requestId, "Stream error (code " + what + ")");
+                    startWebPageFallback(source.displayUrl, requestId, "Stream error (code " + what + ")");
                 }
                 return true;
             });
@@ -469,12 +476,13 @@ public class RadioService extends Service {
             mediaPlayer.prepareAsync(); // non-blocking
 
             // Show "connecting…" notification immediately
-            startForeground(NOTIF_ID, buildNotification("Connecting", source.displayUrl));
+            String displayName = !source.stationName.isEmpty() ? source.stationName : source.displayUrl;
+            startForeground(NOTIF_ID, buildNotification("Connecting", displayName));
             broadcastState(false, null, "Connecting to music");
 
         } catch (Exception e) {
             logError("Error setting up MediaPlayer requestId=" + requestId, e);
-            startWebPageFallback(currentUrl, requestId, "Cannot open stream");
+            startWebPageFallback(source.displayUrl, requestId, "Cannot open stream");
         }
     }
 
@@ -803,6 +811,7 @@ public class RadioService extends Service {
     }
 
     private void stopPlayback(boolean broadcastIdle) {
+        stopVoiceAlert();
         isPlaying = false;
         introFinished = false;
         streamPrepared = false;
@@ -883,6 +892,13 @@ public class RadioService extends Service {
     private StreamSource resolveStreamSource(String url) {
         Map<String, String> playerHeaders = createPlayerHeaders();
         HttpURLConnection connection = null;
+        String knownDirectStream = StreamUrlManager.getKnownDirectStreamForUrl(url);
+        if (!knownDirectStream.isEmpty()) {
+            Map<String, String> sourceHeaders = createPlayerHeaders();
+            sourceHeaders.put("Referer", url);
+            return new StreamSource(knownDirectStream, url, sourceHeaders,
+                    StreamUrlManager.getRadioNameForUrl(url));
+        }
 
         try {
             connection = (HttpURLConnection) new URL(url).openConnection();
@@ -896,23 +912,36 @@ public class RadioService extends Service {
             String contentType = connection.getContentType();
             String finalUrl = connection.getURL().toString();
             if (!isHtmlContent(contentType)) {
-                return new StreamSource(finalUrl, finalUrl, playerHeaders);
+                return new StreamSource(finalUrl, finalUrl, playerHeaders,
+                        StreamUrlManager.getRadioNameForUrl(finalUrl));
             }
 
             String html = readSmallTextResponse(connection.getInputStream());
+            OnlineRadioBoxStation onlineRadioBoxStation = extractOnlineRadioBoxStation(finalUrl, html);
+            if (onlineRadioBoxStation != null) {
+                Log.d(TAG, "Resolved OnlineRadioBox station to media source: "
+                        + onlineRadioBoxStation.streamUrl);
+                Map<String, String> sourceHeaders = createPlayerHeaders();
+                sourceHeaders.put("Referer", finalUrl);
+                return new StreamSource(onlineRadioBoxStation.streamUrl, finalUrl, sourceHeaders,
+                        onlineRadioBoxStation.name);
+            }
+
             String sourceUrl = extractMediaSourceUrl(finalUrl, html);
             if (sourceUrl != null) {
                 Log.d(TAG, "Resolved HTML player page to media source: " + sourceUrl);
                 Map<String, String> sourceHeaders = createPlayerHeaders();
                 sourceHeaders.put("Referer", finalUrl);
-                return new StreamSource(sourceUrl, finalUrl, sourceHeaders);
+                return new StreamSource(sourceUrl, finalUrl, sourceHeaders,
+                        StreamUrlManager.getRadioNameForUrl(finalUrl));
             }
 
             Log.w(TAG, "HTML page did not expose a media source. Retrying URL with audio headers.");
-            return new StreamSource(finalUrl, finalUrl, playerHeaders);
+            return new StreamSource(finalUrl, finalUrl, playerHeaders,
+                    StreamUrlManager.getRadioNameForUrl(finalUrl));
         } catch (Exception e) {
             Log.w(TAG, "Could not pre-resolve stream URL. Trying direct playback.", e);
-            return new StreamSource(url, url, playerHeaders);
+            return new StreamSource(url, url, playerHeaders, StreamUrlManager.getRadioNameForUrl(url));
         } finally {
             if (connection != null) {
                 connection.disconnect();
@@ -962,8 +991,8 @@ public class RadioService extends Service {
             byte[] buffer = new byte[4096];
             int total = 0;
             int read;
-            while ((read = in.read(buffer)) != -1 && total < 65536) {
-                int allowed = Math.min(read, 65536 - total);
+            while ((read = in.read(buffer)) != -1 && total < MAX_HTML_SCAN_BYTES) {
+                int allowed = Math.min(read, MAX_HTML_SCAN_BYTES - total);
                 out.write(buffer, 0, allowed);
                 total += allowed;
             }
@@ -1011,6 +1040,43 @@ public class RadioService extends Service {
         }
 
         return null;
+    }
+
+    private OnlineRadioBoxStation extractOnlineRadioBoxStation(String baseUrl, String html) {
+        String streamUrl = extractOnlineRadioBoxStream(baseUrl, html);
+        if (streamUrl == null || streamUrl.trim().isEmpty()) return null;
+
+        String stationName = StreamUrlManager.getRadioNameForUrl(baseUrl);
+        String titleStationName = cleanStationName(extractHtmlTitle(html));
+        if (!titleStationName.isEmpty() && !titleStationName.equals("your radio station")) {
+            stationName = titleStationName;
+        }
+        stationName = cleanStationName(stationName);
+        return new OnlineRadioBoxStation(streamUrl, stationName);
+    }
+
+    private String extractHtmlTitle(String html) {
+        if (html == null || html.isEmpty()) return "";
+        Pattern titlePattern = Pattern.compile("(?is)<title>\\s*([^<]+?)\\s*</title>");
+        Matcher matcher = titlePattern.matcher(html);
+        if (!matcher.find()) return "";
+        String title = htmlDecode(matcher.group(1)).replaceAll("\\s+", " ").trim();
+        int divider = title.indexOf('|');
+        if (divider > 0) {
+            title = title.substring(0, divider).trim();
+        }
+        return title;
+    }
+
+    private String htmlDecode(String value) {
+        if (value == null) return "";
+        return value.replace("&amp;", "&")
+                .replace("&quot;", "\"")
+                .replace("&#34;", "\"")
+                .replace("&#39;", "'")
+                .replace("&apos;", "'")
+                .replace("&nbsp;", " ")
+                .trim();
     }
 
     private String extractOnlineRadioBoxStream(String baseUrl, String html) {
@@ -1248,6 +1314,72 @@ public class RadioService extends Service {
         }
     }
 
+    private void announceStartupStatus(String url, int requestId) {
+        announceStartupStatus(url, requestId, 0);
+    }
+
+    private void announceStartupStatus(String url, int requestId, int attempt) {
+        if (requestId != playbackRequestId || offlineMode || offlinePlayer != null || isPlaying) return;
+        if (urlManager != null && !urlManager.isAppEnabled()) return;
+        if (isQuietHoursNow()) return;
+        if ((!ttsReady || textToSpeech == null) && attempt < 8) {
+            handler.postDelayed(() -> announceStartupStatus(url, requestId, attempt + 1), 2_000L);
+            return;
+        }
+
+        String stationName = StreamUrlManager.getRadioNameForUrl(url);
+        String battery = getBatteryAnnouncement();
+        String message = "Welcome to Bathroom Audio Player. "
+                + getNetworkAnnouncement() + " Current time is " + formatCurrentTime()
+                + ". " + battery + " Selected radio is " + stationName
+                + ". Music will start shortly.";
+        speakVoiceAlert(message, null);
+    }
+
+    private String getNetworkAnnouncement() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        NetworkInfo info = cm != null ? cm.getActiveNetworkInfo() : null;
+        if (info != null && info.isConnected()) {
+            if (info.getType() == ConnectivityManager.TYPE_WIFI) {
+                return "Wi-Fi is connected.";
+            }
+            return "Internet is connected. Wi-Fi is not connected.";
+        }
+        return "Wi-Fi is not connected.";
+    }
+
+    private String getBatteryAnnouncement() {
+        int batteryPercent = getBatteryPercent();
+        if (batteryPercent < 0) {
+            return "Battery percentage is not available.";
+        }
+        return "Battery is " + batteryPercent + " percent.";
+    }
+
+    private int getBatteryPercent() {
+        Intent battery = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        if (battery == null) return -1;
+        int level = battery.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+        int scale = battery.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+        if (level < 0 || scale <= 0) return -1;
+        return Math.round((level * 100f) / scale);
+    }
+
+    private String formatCurrentTime() {
+        return new SimpleDateFormat("h:mm a", Locale.US).format(new Date());
+    }
+
+    private void stopVoiceAlert() {
+        if (textToSpeech != null) {
+            try {
+                textToSpeech.stop();
+            } catch (Exception e) {
+                Log.w(TAG, "Could not stop voice alert", e);
+            }
+        }
+        restoreMusicVolume();
+    }
+
     private void applyDirectAudioNormalizer(MediaPlayer player) {
         if (player == null) return;
         try {
@@ -1439,6 +1571,7 @@ public class RadioService extends Service {
 
     private void startOfflineFallback(String reason) {
         playbackRequestId++;
+        stopVoiceAlert();
         stopPlayback(false);
         offlineMode = true;
         stopWaitingLoop();
@@ -1535,18 +1668,26 @@ public class RadioService extends Service {
     }
 
     private String getStationName(String url) {
+        String knownName = StreamUrlManager.getRadioNameForUrl(url);
+        if (!knownName.isEmpty() && !knownName.equals("Radio station")) {
+            return knownName;
+        }
         if (url == null || url.isEmpty()) return "your radio station";
         try {
             Uri uri = Uri.parse(url);
             String host = uri.getHost();
             if (host == null || host.isEmpty()) return "your radio station";
-            return host.replace("www.", "").replace(".", " dot ");
+            return StreamUrlManager.getRadioNameForUrl(url);
         } catch (Exception e) {
             return "your radio station";
         }
     }
 
     private String getAnnouncementStationName(String pageTitle, String fallbackUrl) {
+        String knownName = StreamUrlManager.getRadioNameForUrl(fallbackUrl);
+        if (!knownName.isEmpty() && !knownName.equals("Radio station")) {
+            return knownName;
+        }
         String cleaned = cleanStationName(pageTitle);
         if (!cleaned.isEmpty()) return cleaned;
         return cleanStationName(getStationName(fallbackUrl));
@@ -1554,13 +1695,25 @@ public class RadioService extends Service {
 
     private String cleanStationName(String raw) {
         if (raw == null) return "";
-        String cleaned = raw.replaceAll("(?i)\\b(listen|live|online|radio|station|stream|fm|am)\\b", " ")
+        String cleaned = raw.replaceAll("(?i)\\bonline\\s+radio\\s+box\\b", " ")
+                .replaceAll("(?i)\\bradio\\s+box\\b", " ")
+                .replaceAll("(?i)\\b(listen|live|online|station|stream)\\b", " ")
                 .replace("|", " ")
                 .replace("-", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
+        cleaned = cleaned.replaceAll("(?i)^to\\s+", "").trim();
         if (cleaned.isEmpty()) return "your radio station";
         return cleaned;
+    }
+
+    private String buildDisplayText(String stationName, String url) {
+        String cleanedStation = cleanStationName(stationName);
+        if (cleanedStation.isEmpty() || cleanedStation.equals("your radio station")) {
+            return url != null ? url : "";
+        }
+        if (url == null || url.trim().isEmpty()) return cleanedStation;
+        return cleanedStation + "\n" + url;
     }
 
     // ── Locks ─────────────────────────────────────────────────────────────────
@@ -1652,11 +1805,27 @@ public class RadioService extends Service {
         final String playUrl;
         final String displayUrl;
         final Map<String, String> headers;
+        final String stationName;
 
         StreamSource(String playUrl, String displayUrl, Map<String, String> headers) {
+            this(playUrl, displayUrl, headers, "");
+        }
+
+        StreamSource(String playUrl, String displayUrl, Map<String, String> headers, String stationName) {
             this.playUrl = playUrl;
             this.displayUrl = displayUrl;
             this.headers = headers;
+            this.stationName = stationName != null ? stationName : "";
+        }
+    }
+
+    private static class OnlineRadioBoxStation {
+        final String streamUrl;
+        final String name;
+
+        OnlineRadioBoxStation(String streamUrl, String name) {
+            this.streamUrl = streamUrl;
+            this.name = name != null ? name : "";
         }
     }
 }

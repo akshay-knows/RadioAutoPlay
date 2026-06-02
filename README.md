@@ -2,7 +2,7 @@
 
 An Android app for turning a spare phone into a charger-triggered radio player.
 
-Plug the phone into power and Radio AutoPlay waits 2 seconds, plays a random intro sound, opens a saved webpage radio station, and starts music automatically. Unplug power and it stops cleanly.
+Plug the phone into power and Radio AutoPlay can wait through a 40-second startup window, announce status, play a random intro sound, open a saved webpage radio station, and start music automatically. Unplug power and it stops cleanly.
 
 It was built for a simple but fun setup: a spare Android phone, speakers, and a bathroom light switch or charger connection that makes the room come alive when power turns on.
 
@@ -23,10 +23,10 @@ It was built for a simple but fun setup: a spare Android phone, speakers, and a 
 |---|---|
 | Charger autoplay | Starts playback when Android reports charger/power connected |
 | Auto stop | Stops playback when charger/power is disconnected |
-| 2-second start delay | Gives the phone/network a moment before the intro and station start |
+| 40-second startup window | Gives the phone/network time to settle and announces Wi-Fi, time, battery, and station |
 | Random intro sounds | Plays one bundled or custom intro sound before the station |
 | Webpage station mode | Opens saved radio webpages in a hidden WebView, similar to a browser |
-| OnlineRadioBox support | Clicks/starts OnlineRadioBox-style webpage players automatically |
+| OnlineRadioBox support | Resolves known OnlineRadioBox stations to verified direct audio streams first |
 | Volume normalizer | Keeps playback at a safer consistent level across loud and quiet stations |
 | Quiet hours toggle | Optional silent window from 12:00 AM to 6:00 AM |
 | Shuffle mode | Picks a random station every time the charger connects |
@@ -38,14 +38,14 @@ It was built for a simple but fun setup: a spare Android phone, speakers, and a 
 
 ## Latest Version
 
-Current app version: **v1.13**
+Current app version: **v1.14**
 
 Download the latest APK from [GitHub Releases](https://github.com/akshay-knows/RadioAutoPlay/releases/latest).
 
-The v1.13 APK is also archived here after the release workflow finishes:
+The v1.14 APK is also archived here after the release workflow finishes:
 
 ```text
-apk-releases/v1.13/RadioAutoPlay-v1.13.apk
+apk-releases/v1.14/RadioAutoPlay-v1.14.apk
 ```
 
 ## How It Works
@@ -57,7 +57,7 @@ Charger connected
 ChargerReceiver starts RadioService
       |
       v
-2-second delay
+40-second startup window
       |
       v
 Random intro sound
@@ -154,9 +154,9 @@ Android does not allow normal apps to silently update themselves, so the final i
 5. Push a matching tag:
 
 ```bash
-git tag -a v1.13 -m "Radio AutoPlay v1.13"
+git tag -a v1.14 -m "Radio AutoPlay v1.14"
 git push origin main
-git push origin v1.13
+git push origin v1.14
 ```
 
 The `Release APK` workflow builds the signed APK, archives it in the repo, and creates a GitHub Release.

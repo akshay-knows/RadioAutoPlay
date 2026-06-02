@@ -8,8 +8,8 @@ android {
         applicationId "com.radioautoplay"
         minSdkVersion 19          // Android 4.4 KitKat
         targetSdkVersion 33
-        versionCode 14
-        versionName "1.13"
+        versionCode 15
+        versionName "1.14"
         vectorDrawables.useSupportLibrary = true
     }
 

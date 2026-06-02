@@ -53,6 +53,7 @@ public class UrlAdapter extends RecyclerView.Adapter<UrlAdapter.ViewHolder> {
     @Override
     public void onBindViewHolder(@NonNull ViewHolder h, int position) {
         String url = urls.get(position);
+        h.tvStationName.setText(StreamUrlManager.getRadioNameForUrl(url));
         h.tvUrl.setText(url);
 
         // Highlight the currently playing / selected stream
@@ -74,12 +75,13 @@ public class UrlAdapter extends RecyclerView.Adapter<UrlAdapter.ViewHolder> {
     public int getItemCount() { return urls.size(); }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
-        TextView   tvIndex, tvUrl;
+        TextView   tvIndex, tvStationName, tvUrl;
         ImageButton btnDelete, btnPlay;
 
         ViewHolder(View v) {
             super(v);
             tvIndex   = v.findViewById(R.id.tv_index);
+            tvStationName = v.findViewById(R.id.tv_station_name);
             tvUrl     = v.findViewById(R.id.tv_url);
             btnDelete = v.findViewById(R.id.btn_delete);
             btnPlay   = v.findViewById(R.id.btn_play);
