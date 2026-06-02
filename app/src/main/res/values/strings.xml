@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Radio AutoPlay</string>
-    <string name="changelog_v1_1">v1.16\n- Simplified webpage playback so one hidden WebView controls one station\n- Removed waiting-audio leftovers, auto-skip failover, and failed-link hiding\n- Uses browser-style webpage headers for OnlineRadioBox and OnlineRadioFM links\n- Keeps retrying the same web player gently instead of restarting or overlapping streams</string>
+    <string name="changelog_v1_1">v1.17\n- Starts webpage playback only after the intro finishes\n- Removed intro-time WebView preload and mute/reuse behavior\n- Uses a simpler browser-like page play click before falling back to direct page stream audio\n- Keeps one WebView and one station active to avoid overlapping or stopping links</string>
 </resources>

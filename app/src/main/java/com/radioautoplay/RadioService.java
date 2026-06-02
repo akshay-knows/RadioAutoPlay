@@ -105,7 +105,6 @@ public class RadioService extends Service {
     private boolean lowBatteryAnnounced = false;
     private int playbackRequestId = 0;
     private String lastRequestedUrl;
-    private String pendingWebPageUrl;
     private final Random introRandom = new Random();
     private final AudioManager.OnAudioFocusChangeListener audioFocusChangeListener = focusChange -> { };
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
@@ -254,9 +253,8 @@ public class RadioService extends Service {
         logInfo("startPlaybackAfterIntro requestId=" + requestId + " url=" + url);
         introFinished = false;
         startForeground(NOTIF_ID, buildNotification("Starting intro", url));
-        broadcastState(false, null, "Starting intro and buffering stream");
+        broadcastState(false, null, "Starting intro");
 
-        startPlayback(url, requestId);
         playIntroTheme(url, requestId);
     }
 
@@ -323,10 +321,6 @@ public class RadioService extends Service {
         introFinished = true;
         broadcastState(false, null, "Tuning station");
         updateNotification("Tuning station", url);
-        if (webViewPlayer != null) {
-            startDeferredWebAutoplay(requestId);
-            return;
-        }
         startPlayback(url, requestId);
     }
 
@@ -339,23 +333,22 @@ public class RadioService extends Service {
         activePlaybackUrl = url;
         logInfo("startPlayback requestId=" + requestId + " url=" + url);
 
-        String reason = introFinished ? "Opening web station" : "Preloading web station";
-        startWebPageFallback(url, requestId, reason);
+        startWebPageFallback(url, requestId);
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private void startWebPageFallback(String url, int requestId, String reason) {
+    private void startWebPageFallback(String url, int requestId) {
         if (requestId != playbackRequestId) return;
         if (webFallbackStarted) {
-            logWarn("Web fallback already started. requestId=" + requestId + " reason=" + reason);
+            logWarn("Web player already started. requestId=" + requestId);
             return;
         }
 
         webFallbackStarted = true;
         requestAudioFocus();
-        broadcastState(false, null, reason + ". Opening web player");
+        broadcastState(false, null, "Opening web player");
         updateNotification("Opening web player", url);
-        logInfo("startWebPageFallback requestId=" + requestId + " url=" + url + " reason=" + reason);
+        logInfo("startWebPageFallback requestId=" + requestId + " url=" + url);
 
         handler.post(() -> {
             if (requestId != playbackRequestId) return;
@@ -402,14 +395,6 @@ public class RadioService extends Service {
                 @Override
                 public void onPageFinished(WebView view, String pageUrl) {
                     if (requestId != playbackRequestId) return;
-                    pendingWebPageUrl = pageUrl;
-                    if (!introFinished) {
-                        pauseAndMuteWebMedia(view);
-                        broadcastState(false, null, "Web station loaded, finishing intro");
-                        updateNotification("Web station ready", pageUrl);
-                        logInfo("Web station preloaded requestId=" + requestId + " pageUrl=" + pageUrl);
-                        return;
-                    }
                     startWebAutoplayNow(view, pageUrl, requestId);
                 }
 
@@ -440,21 +425,8 @@ public class RadioService extends Service {
         });
     }
 
-    private void startDeferredWebAutoplay(int requestId) {
-        if (requestId != playbackRequestId || webViewPlayer == null) return;
-        String pageUrl = pendingWebPageUrl;
-        if (pageUrl == null || pageUrl.trim().isEmpty()) {
-            pageUrl = webViewPlayer.getUrl();
-        }
-        if (pageUrl == null || pageUrl.trim().isEmpty()) {
-            pageUrl = currentUrl;
-        }
-        startWebAutoplayNow(webViewPlayer, pageUrl, requestId);
-    }
-
     private void startWebAutoplayNow(WebView view, String pageUrl, int requestId) {
         if (requestId != playbackRequestId || view == null || isPlaying) return;
-        pendingWebPageUrl = null;
         requestAudioFocus();
         view.setNetworkAvailable(true);
         view.onResume();
@@ -465,7 +437,7 @@ public class RadioService extends Service {
         handler.postDelayed(() -> verifyWebPlaybackStarted(pageUrl, requestId, 0), WEB_START_RETRY_MS);
     }
 
-    private void pauseAndMuteWebMedia(WebView view) {
+    private void stopWebMedia(WebView view) {
         String script = "(function(){"
                 + "try{var media=[].slice.call(document.querySelectorAll('audio,video'));"
                 + "media.forEach(function(m){try{m.pause&&m.pause();m.muted=true;m.volume=0;}catch(e){}});}catch(e){}"
@@ -499,8 +471,7 @@ public class RadioService extends Service {
                 + "function playMedia(m){if(!m)return false;try{stopOthers(m);m.muted=false;m.autoplay=true;m.controls=true;m.volume=targetVolume;var p=m.play&&m.play();if(p&&p.then)p.then(function(){window.radioAutoPlayStarted=true;log('media playing');}).catch(function(e){log('play rejected '+e);});return true;}catch(e){log('playMedia error '+e);return false;}}"
                 + "function clickTarget(e){if(!e)return;try{e.click();}catch(x){}try{e.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));}catch(x){}var p=e.closest&&e.closest('button,a,[role=button],.station_play,.b-play,.button-play');if(p&&p!==e){try{p.click();}catch(x){}}}"
                 + "function playExisting(){var media=allMedia().filter(function(m){try{return m.id!=='radioautoplay_audio'&&(m.src||m.currentSrc||m.querySelector('source[src]'));}catch(e){return false;}});return playMedia(media[0]);}"
-                + "function start(){if(window.radioAutoPlayStarted||alreadyPlaying()){window.radioAutoPlayStarted=true;return;}var target=findTarget();var src=streamOf(target);if(src){log('using stream '+src);playMedia(ownedAudio(src));return;}clickTarget(target);setTimeout(playExisting,300);setTimeout(playExisting,1200);}"
-                + "stopOthers(null);"
+                + "function start(){if(window.radioAutoPlayStarted||alreadyPlaying()){window.radioAutoPlayStarted=true;return;}var target=findTarget();var src=streamOf(target);clickTarget(target);setTimeout(playExisting,350);setTimeout(function(){if(!alreadyPlaying()&&src){log('using stream '+src);playMedia(ownedAudio(src));}},1400);}"
                 + "start();"
                 + "setTimeout(start,1500);"
                 + "setTimeout(start,3500);"
@@ -655,7 +626,7 @@ public class RadioService extends Service {
             WebView oldView = webViewPlayer;
             webViewPlayer = null;
             try {
-                pauseAndMuteWebMedia(oldView);
+                stopWebMedia(oldView);
                 oldView.stopLoading();
                 oldView.loadUrl("about:blank");
                 oldView.onPause();
