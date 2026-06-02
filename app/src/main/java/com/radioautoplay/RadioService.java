@@ -557,7 +557,7 @@ public class RadioService extends Service {
     private void startWebAutoplayNow(WebView view, String pageUrl, int requestId) {
         pendingWebRequestId = -1;
         pendingWebPageUrl = null;
-        injectAutoplayScript(view);
+        injectAutoplayScript(view, pageUrl);
         logInfo("Web autoplay start requestId=" + requestId + " pageUrl=" + pageUrl);
         handler.postDelayed(() -> verifyWebPlaybackStarted(pageUrl, requestId, 0), 2_500L);
     }
@@ -574,26 +574,28 @@ public class RadioService extends Service {
         }
     }
 
-    private void injectAutoplayScript(WebView view) {
+    private void injectAutoplayScript(WebView view, String targetUrl) {
+        String stationCode = jsString(extractOnlineRadioBoxStationCode(targetUrl));
         String script = "(function(){"
                 + "var targetVolume=" + NORMALIZED_STREAM_VOLUME + ";"
-                + "function playMedia(){"
-                + "var media=[].slice.call(document.querySelectorAll('audio,video'));"
-                + "media.forEach(function(m){try{m.muted=false;m.autoplay=true;m.controls=true;m.volume=targetVolume;m.play&&m.play();}catch(e){}});"
+                + "var targetCode='" + stationCode + "';"
+                + "function allMedia(){return [].slice.call(document.querySelectorAll('audio,video'));}"
+                + "function stopOtherMedia(keep){allMedia().forEach(function(m){try{if(m!==keep){m.pause&&m.pause();m.muted=true;m.volume=0;}}catch(e){}});}"
+                + "function attrs(e){var s='';try{s+=(e.id||'')+' '+(e.className||'')+' '+(e.href||'')+' '+(e.getAttribute('stream')||'')+' '+(e.getAttribute('data-stream')||'')+' '+(e.getAttribute('data-src')||'')+' '+(e.getAttribute('onclick')||'')+' '+(e.getAttribute('aria-label')||'')+' '+(e.title||'')+' '+((e.parentElement&&(e.parentElement.innerText||e.parentElement.getAttribute('href')||''))||'');}catch(e){}return s.toLowerCase();}"
+                + "function findTarget(){var candidates=[].slice.call(document.querySelectorAll('[stream],[data-stream],[data-src],button,a,[role=button],.play,.play-button,.jp-play,.mejs-playpause-button'));"
+                + "if(targetCode){for(var i=0;i<candidates.length;i++){if(attrs(candidates[i]).indexOf(targetCode)>=0)return candidates[i];}}"
+                + "return document.getElementById('set_radio_button')||candidates.find(function(e){return attrs(e).indexOf('play')>=0||attrs(e).indexOf('listen')>=0||attrs(e).indexOf('start')>=0;})||document.querySelector('[stream],[data-stream],[data-src]');}"
+                + "function streamOf(e){if(!e)return '';return e.getAttribute('stream')||e.getAttribute('data-stream')||e.getAttribute('data-src')||'';}"
+                + "function ownedAudio(src){var a=document.getElementById('radioautoplay_audio');if(!a){a=document.createElement('audio');a.id='radioautoplay_audio';a.controls=true;a.preload='auto';a.style.position='fixed';a.style.left='0';a.style.bottom='0';a.style.width='1px';a.style.height='1px';document.body.appendChild(a);}if(src&&a.src!==src){a.src=src;}return a;}"
+                + "function playOne(){var target=findTarget();var src=streamOf(target);stopOtherMedia(null);if(target&&!src){try{target.click();}catch(e){}}"
+                + "var owned=src?ownedAudio(src):document.getElementById('radioautoplay_audio');"
+                + "if(owned){try{stopOtherMedia(owned);owned.muted=false;owned.autoplay=true;owned.volume=targetVolume;owned.play&&owned.play();return;}catch(e){}}"
+                + "var media=allMedia().filter(function(m){try{return m.id!=='radioautoplay_audio'&&(m.src||m.currentSrc||m.querySelector('source'));}catch(e){return false;}});"
+                + "var chosen=media[0];if(chosen){try{stopOtherMedia(chosen);chosen.muted=false;chosen.autoplay=true;chosen.controls=true;chosen.volume=targetVolume;chosen.play&&chosen.play();}catch(e){}}"
                 + "}"
-                + "try{var orb=document.getElementById('set_radio_button')||document.querySelector('[stream]');"
-                + "if(orb){var src=orb.getAttribute('stream')||orb.getAttribute('data-stream')||orb.getAttribute('data-src');"
-                + "try{orb.click();}catch(e){}"
-                + "if(src&&!document.getElementById('radioautoplay_audio')){var a=document.createElement('audio');"
-                + "a.id='radioautoplay_audio';a.src=src;a.autoplay=true;a.controls=true;a.preload='auto';a.volume=targetVolume;a.style.position='fixed';"
-                + "a.style.left='0';a.style.bottom='0';a.style.width='1px';a.style.height='1px';document.body.appendChild(a);"
-                + "try{a.play();}catch(e){}}}}catch(e){}"
-                + "playMedia();"
-                + "var buttons=[].slice.call(document.querySelectorAll('button,[role=button],.play,.play-button,.jp-play,.mejs-playpause-button,a'));"
-                + "buttons.slice(0,12).forEach(function(b){try{var t=(b.innerText||b.ariaLabel||b.title||b.className||'').toLowerCase();"
-                + "if(t.indexOf('play')>=0||t.indexOf('listen')>=0||t.indexOf('start')>=0||t.indexOf('▶')>=0){b.click();}}catch(e){}});"
-                + "setTimeout(playMedia,1000);"
-                + "setTimeout(playMedia,3000);"
+                + "playOne();"
+                + "setTimeout(playOne,1000);"
+                + "setTimeout(playOne,3000);"
                 + "})();";
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             view.evaluateJavascript(script, null);
@@ -622,7 +624,7 @@ public class RadioService extends Service {
                     + " attempt=" + attempt + " playing=" + playing + " mediaCount=" + mediaCount
                     + " payload=" + result);
             if (!playing && attempt < WEB_AUTOPLAY_PROBE_ATTEMPTS) {
-                injectAutoplayScript(webViewPlayer);
+                injectAutoplayScript(webViewPlayer, pageUrl);
                 handler.postDelayed(() -> verifyWebPlaybackStarted(pageUrl, requestId, attempt + 1), 1_500L);
                 return;
             }
@@ -645,7 +647,7 @@ public class RadioService extends Service {
                 // Do not auto-skip web station on timeout; keep attempting autoplay in-place.
                 logWarn("Web station start still pending after timeout; keeping current station. pageUrl=" + pageUrl);
                 if (webViewPlayer != null) {
-                    injectAutoplayScript(webViewPlayer);
+                    injectAutoplayScript(webViewPlayer, pageUrl);
                 }
                 handler.postDelayed(() -> resetStreamWatchdogForWebPlayback(requestId, pageUrl),
                         WEB_POST_LOAD_START_TIMEOUT_MS);
@@ -665,8 +667,11 @@ public class RadioService extends Service {
         applyWebAudioNormalizer();
         urlManager.markStreamSuccess(activePlaybackUrl != null ? activePlaybackUrl : pageUrl);
         String station = getAnnouncementStationName(pageTitle, pageUrl);
-        currentUrl = station;
-        logInfo("Web playback confirmed requestId=" + requestId + " station=" + station + " pageUrl=" + pageUrl);
+        String displayUrl = activePlaybackUrl != null && !activePlaybackUrl.trim().isEmpty()
+                ? activePlaybackUrl : pageUrl;
+        currentUrl = station + "\n" + displayUrl;
+        logInfo("Web playback confirmed requestId=" + requestId + " station=" + station
+                + " displayUrl=" + displayUrl + " pageUrl=" + pageUrl);
         broadcastState(true, null, "Playing web player");
         updateNotification("Playing web player", station);
         startWebPlaybackMonitor(requestId);
@@ -681,6 +686,26 @@ public class RadioService extends Service {
         int to = raw.indexOf("\"", from);
         if (to <= from) return "";
         return raw.substring(from, to).trim();
+    }
+
+    private String extractOnlineRadioBoxStationCode(String url) {
+        if (url == null || url.trim().isEmpty()) return "";
+        try {
+            Uri uri = Uri.parse(url);
+            String host = uri.getHost();
+            if (host == null || !host.toLowerCase(Locale.US).contains("onlineradiobox.com")) {
+                return "";
+            }
+            String code = uri.getQueryParameter("cs");
+            return code != null ? code.trim().toLowerCase(Locale.US) : "";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private String jsString(String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\").replace("'", "\\'");
     }
 
     private void startWebPlaybackMonitor(int requestId) {
@@ -706,7 +731,7 @@ public class RadioService extends Service {
                         webSilentChecks = 0;
                         webNoMediaChecks = 0;
                     } else {
-                        injectAutoplayScript(webViewPlayer);
+                        injectAutoplayScript(webViewPlayer, activePlaybackUrl != null ? activePlaybackUrl : currentUrl);
                         if (mediaCount > 0) {
                             webSilentChecks++;
                         } else {
@@ -1016,14 +1041,19 @@ public class RadioService extends Service {
 
     private void releaseWebViewOnly() {
         if (webViewPlayer != null) {
+            WebView oldView = webViewPlayer;
+            webViewPlayer = null;
             try {
-                webViewPlayer.stopLoading();
-                webViewPlayer.loadUrl("about:blank");
-            webViewPlayer.destroy();
+                pauseAndMuteWebMedia(oldView);
+                oldView.stopLoading();
+                oldView.loadUrl("about:blank");
+                oldView.onPause();
+                oldView.pauseTimers();
+                oldView.removeAllViews();
+                oldView.destroy();
             } catch (Exception e) {
                 Log.e(TAG, "Error releasing web player", e);
             }
-            webViewPlayer = null;
         }
         cancelWebPlaybackMonitor();
     }

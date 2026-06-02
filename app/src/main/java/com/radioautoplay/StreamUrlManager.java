@@ -28,7 +28,7 @@ public class StreamUrlManager {
     private static final String KEY_WEB_URLS = "web_stream_urls";
     private static final String KEY_WEB_STATIONS_DEFAULT = "web_stations_default";
     private static final String KEY_FAILED_UNTIL_PREFIX = "failed_until_";
-    private static final int DEFAULT_STREAMS_VERSION = 5;
+    private static final int DEFAULT_STREAMS_VERSION = 6;
     private static final long FAILED_SKIP_MS = 30 * 60 * 1000L;
 
     private static final String[] DEFAULT_STREAM_URLS = {
@@ -82,15 +82,12 @@ public class StreamUrlManager {
             "https://onlineradiobox.com/uk/capitalfmuk/?cs=uk.capitalfmuk&played=1",
             "https://onlineradiobox.com/uk/?cs=uk.lbc973fm&played=1",
             "https://onlineradiobox.com/uk/?cs=uk.smoothradio1022&played=1",
-            "https://onlineradiobox.com/in/?cs=in.ndtv&played=1",
-            "https://onlineradiobox.com/in/?cs=in.aajtak&played=1&p=3&tzLoc=Asia%2FCalcutta",
             "https://onlineradiobox.com/in/?cs=in.karanaujla&played=1&p=4&tzLoc=Asia%2FCalcutta",
             "https://onlineradiobox.com/in/?cs=in.air&played=1&p=7&tzLoc=Asia%2FCalcutta",
             "https://onlineradiobox.com/in/?cs=za.hindvaniradio&played=1&p=1&sf_langs=hi%2C&tzLoc=Asia%2FCalcutta",
             "https://onlineradiofm.in/stations/all-india-air-akashvani",
             "https://onlineradiobox.com/in/?cs=in.easy60s&played=1&p=4&tzLoc=Asia%2FCalcutta",
             "https://onlineradiobox.com/in/Karnataka-/?cs=in.easy10s&played=1",
-            "https://onlineradiobox.com/in/genre/news/?cs=in.ndtvindia&played=1",
             "https://onlineradiobox.com/genre/talk/?cs=ca.cbcrtoronto&played=1&p=1&tzLoc=Asia%2FCalcutta"
 
 
@@ -102,7 +99,10 @@ public class StreamUrlManager {
     };
 
     private static final String[] REMOVED_DEFAULT_WEB_STREAM_URLS = {
-            "https://onlineradiobox.com/search?cs=uk.capitalfmuk&played=1&q=capital&radioid=1018&tzLoc=Asia%2FCalcutta"
+            "https://onlineradiobox.com/search?cs=uk.capitalfmuk&played=1&q=capital&radioid=1018&tzLoc=Asia%2FCalcutta",
+            "https://onlineradiobox.com/in/?cs=in.ndtv&played=1",
+            "https://onlineradiobox.com/in/genre/news/?cs=in.ndtvindia&played=1",
+            "https://onlineradiobox.com/in/?cs=in.aajtak&played=1&p=3&tzLoc=Asia%2FCalcutta"
     };
 
     private final SharedPreferences prefs;
