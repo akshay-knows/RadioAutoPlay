@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Radio AutoPlay</string>
-    <string name="changelog_v1_1">v1.8\n- Changed charger startup delay from 10 seconds to 2 seconds\n- Added master Radio AutoPlay ON/OFF switch\n- Fixed offline backup playback crash when network disconnects\n- Kept volume normalization and webpage playback improvements</string>
+    <string name="changelog_v1_1">v1.9\n- Updated the app UI to Material 3 dark design\n- Added modern Material cards, buttons, switches, inputs, and dialogs\n- Removed duplicate webpage station entries automatically\n- Improved station dedupe for manually added and imported OnlineRadioBox links</string>
 </resources>

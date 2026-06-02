@@ -54,14 +54,14 @@
         </LinearLayout>
 
         <!-- ── Now playing card ───────────────────────────── -->
-        <androidx.cardview.widget.CardView
+        <com.google.android.material.card.MaterialCardView
             xmlns:card_view="http://schemas.android.com/apk/res-auto"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             card_view:cardBackgroundColor="@color/card_bg"
-            card_view:cardCornerRadius="12dp"
-            card_view:cardElevation="4dp">
+            card_view:cardCornerRadius="8dp"
+            card_view:cardElevation="0dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -75,7 +75,7 @@
                     android:text="NOW PLAYING"
                     android:textColor="@color/text_secondary"
                     android:textSize="11sp"
-                    android:letterSpacing="0.1"
+                    android:letterSpacing="0"
                     android:layout_marginBottom="6dp" />
 
                 <TextView
@@ -89,7 +89,7 @@
                     android:maxLines="2"
                     android:layout_marginBottom="12dp" />
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_play_stop"
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
@@ -100,17 +100,17 @@
                     android:textStyle="bold" />
 
             </LinearLayout>
-        </androidx.cardview.widget.CardView>
+        </com.google.android.material.card.MaterialCardView>
 
         <!-- ── Changelog ─────────────────────────────────── -->
-        <androidx.cardview.widget.CardView
+        <com.google.android.material.card.MaterialCardView
             xmlns:card_view="http://schemas.android.com/apk/res-auto"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             card_view:cardBackgroundColor="@color/card_bg"
-            card_view:cardCornerRadius="12dp"
-            card_view:cardElevation="4dp">
+            card_view:cardCornerRadius="8dp"
+            card_view:cardElevation="0dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -124,7 +124,7 @@
                     android:text="WHAT'S NEW"
                     android:textColor="@color/text_secondary"
                     android:textSize="11sp"
-                    android:letterSpacing="0.1"
+                    android:letterSpacing="0"
                     android:layout_marginBottom="8dp" />
 
                 <TextView
@@ -136,7 +136,7 @@
                     android:textSize="13sp"
                     android:lineSpacingExtra="4dp" />
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_check_updates"
                     android:layout_width="match_parent"
                     android:layout_height="44dp"
@@ -147,7 +147,7 @@
                     android:textSize="14sp"
                     android:textStyle="bold" />
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_show_log_path"
                     android:layout_width="match_parent"
                     android:layout_height="44dp"
@@ -159,17 +159,17 @@
                     android:textStyle="bold" />
 
             </LinearLayout>
-        </androidx.cardview.widget.CardView>
+        </com.google.android.material.card.MaterialCardView>
 
         <!-- Main app toggle -->
-        <androidx.cardview.widget.CardView
+        <com.google.android.material.card.MaterialCardView
             xmlns:card_view="http://schemas.android.com/apk/res-auto"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             card_view:cardBackgroundColor="@color/card_bg"
-            card_view:cardCornerRadius="12dp"
-            card_view:cardElevation="4dp">
+            card_view:cardCornerRadius="8dp"
+            card_view:cardElevation="0dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -200,24 +200,24 @@
                         android:textSize="12sp" />
                 </LinearLayout>
 
-                <Switch
+                <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/switch_app_enabled"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:checked="true" />
 
             </LinearLayout>
-        </androidx.cardview.widget.CardView>
+        </com.google.android.material.card.MaterialCardView>
 
         <!-- ── Shuffle toggle ─────────────────────────────── -->
-        <androidx.cardview.widget.CardView
+        <com.google.android.material.card.MaterialCardView
             xmlns:card_view="http://schemas.android.com/apk/res-auto"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             card_view:cardBackgroundColor="@color/card_bg"
-            card_view:cardCornerRadius="12dp"
-            card_view:cardElevation="4dp">
+            card_view:cardCornerRadius="8dp"
+            card_view:cardElevation="0dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -248,24 +248,24 @@
                         android:textSize="12sp" />
                 </LinearLayout>
 
-                <Switch
+                <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/switch_shuffle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:checked="true" />
 
             </LinearLayout>
-        </androidx.cardview.widget.CardView>
+        </com.google.android.material.card.MaterialCardView>
 
         <!-- Quiet hours toggle -->
-        <androidx.cardview.widget.CardView
+        <com.google.android.material.card.MaterialCardView
             xmlns:card_view="http://schemas.android.com/apk/res-auto"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             card_view:cardBackgroundColor="@color/card_bg"
-            card_view:cardCornerRadius="12dp"
-            card_view:cardElevation="4dp">
+            card_view:cardCornerRadius="8dp"
+            card_view:cardElevation="0dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -296,24 +296,24 @@
                         android:textSize="12sp" />
                 </LinearLayout>
 
-                <Switch
+                <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/switch_quiet_hours"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:checked="true" />
 
             </LinearLayout>
-        </androidx.cardview.widget.CardView>
+        </com.google.android.material.card.MaterialCardView>
 
         <!-- ── Playback mode ─────────────────────────────── -->
-        <androidx.cardview.widget.CardView
+        <com.google.android.material.card.MaterialCardView
             xmlns:card_view="http://schemas.android.com/apk/res-auto"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             card_view:cardBackgroundColor="@color/card_bg"
-            card_view:cardCornerRadius="12dp"
-            card_view:cardElevation="4dp">
+            card_view:cardCornerRadius="8dp"
+            card_view:cardElevation="0dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -353,17 +353,17 @@
                     android:textSize="12sp" />
 
             </LinearLayout>
-        </androidx.cardview.widget.CardView>
+        </com.google.android.material.card.MaterialCardView>
 
         <!-- ── Intro sounds ───────────────────────────────── -->
-        <androidx.cardview.widget.CardView
+        <com.google.android.material.card.MaterialCardView
             xmlns:card_view="http://schemas.android.com/apk/res-auto"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             card_view:cardBackgroundColor="@color/card_bg"
-            card_view:cardCornerRadius="12dp"
-            card_view:cardElevation="4dp">
+            card_view:cardCornerRadius="8dp"
+            card_view:cardElevation="0dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -377,10 +377,10 @@
                     android:text="INTRO SOUNDS"
                     android:textColor="@color/text_secondary"
                     android:textSize="11sp"
-                    android:letterSpacing="0.1"
+                    android:letterSpacing="0"
                     android:layout_marginBottom="8dp" />
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_add_intro"
                     android:layout_width="match_parent"
                     android:layout_height="44dp"
@@ -390,7 +390,7 @@
                     android:textSize="14sp"
                     android:textStyle="bold" />
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_clear_intro"
                     android:layout_width="match_parent"
                     android:layout_height="44dp"
@@ -402,17 +402,17 @@
                     android:textStyle="bold" />
 
             </LinearLayout>
-        </androidx.cardview.widget.CardView>
+        </com.google.android.material.card.MaterialCardView>
 
         <!-- ── Add stream ─────────────────────────────────── -->
-        <androidx.cardview.widget.CardView
+        <com.google.android.material.card.MaterialCardView
             xmlns:card_view="http://schemas.android.com/apk/res-auto"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             card_view:cardBackgroundColor="@color/card_bg"
-            card_view:cardCornerRadius="12dp"
-            card_view:cardElevation="4dp">
+            card_view:cardCornerRadius="8dp"
+            card_view:cardElevation="0dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -426,24 +426,34 @@
                     android:text="ADD STREAM URL"
                     android:textColor="@color/text_secondary"
                     android:textSize="11sp"
-                    android:letterSpacing="0.1"
+                    android:letterSpacing="0"
                     android:layout_marginBottom="8dp" />
 
-                <EditText
-                    android:id="@+id/et_new_url"
+                <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:hint="https://example.com/stream"
-                    android:inputType="textUri"
-                    android:textColor="@color/text_primary"
-                    android:textColorHint="@color/text_secondary"
-                    android:background="@drawable/bg_input"
-                    android:padding="12dp"
                     android:layout_marginBottom="8dp"
-                    android:imeOptions="actionDone"
-                    android:maxLines="2" />
+                    app:boxBackgroundColor="@color/surface_variant"
+                    app:boxCornerRadiusBottomEnd="8dp"
+                    app:boxCornerRadiusBottomStart="8dp"
+                    app:boxCornerRadiusTopEnd="8dp"
+                    app:boxCornerRadiusTopStart="8dp"
+                    app:boxStrokeColor="@color/accent"
+                    app:hintTextColor="@color/text_secondary">
 
-                <Button
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/et_new_url"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:imeOptions="actionDone"
+                        android:inputType="textUri"
+                        android:maxLines="2"
+                        android:textColor="@color/text_primary"
+                        android:textColorHint="@color/text_secondary" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_add"
                     android:layout_width="match_parent"
                     android:layout_height="44dp"
@@ -453,7 +463,7 @@
                     android:textSize="14sp"
                     android:textStyle="bold" />
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_import_csv"
                     android:layout_width="match_parent"
                     android:layout_height="44dp"
@@ -465,7 +475,7 @@
                     android:textStyle="bold" />
 
             </LinearLayout>
-        </androidx.cardview.widget.CardView>
+        </com.google.android.material.card.MaterialCardView>
 
         <!-- ── Stream list ────────────────────────────────── -->
         <TextView
@@ -474,7 +484,7 @@
             android:text="SAVED STREAMS"
             android:textColor="@color/text_secondary"
             android:textSize="11sp"
-            android:letterSpacing="0.1"
+            android:letterSpacing="0"
             android:layout_marginBottom="8dp" />
 
         <TextView

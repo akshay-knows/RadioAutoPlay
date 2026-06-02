@@ -2,6 +2,7 @@ package com.radioautoplay;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Build;
 
 import java.util.ArrayList;
@@ -27,7 +28,7 @@ public class StreamUrlManager {
     private static final String KEY_WEB_URLS = "web_stream_urls";
     private static final String KEY_WEB_STATIONS_DEFAULT = "web_stations_default";
     private static final String KEY_FAILED_UNTIL_PREFIX = "failed_until_";
-    private static final int DEFAULT_STREAMS_VERSION = 4;
+    private static final int DEFAULT_STREAMS_VERSION = 5;
     private static final long FAILED_SKIP_MS = 30 * 60 * 1000L;
 
     private static final String[] DEFAULT_STREAM_URLS = {
@@ -90,8 +91,7 @@ public class StreamUrlManager {
             "https://onlineradiobox.com/in/?cs=in.easy60s&played=1&p=4&tzLoc=Asia%2FCalcutta",
             "https://onlineradiobox.com/in/Karnataka-/?cs=in.easy10s&played=1",
             "https://onlineradiobox.com/in/genre/news/?cs=in.ndtvindia&played=1",
-            "https://onlineradiobox.com/genre/talk/?cs=ca.cbcrtoronto&played=1&p=1&tzLoc=Asia%2FCalcutta",
-            "https://onlineradiobox.com/search?cs=uk.capitalfmuk&played=1&q=capital&radioid=1018&tzLoc=Asia%2FCalcutta"
+            "https://onlineradiobox.com/genre/talk/?cs=ca.cbcrtoronto&played=1&p=1&tzLoc=Asia%2FCalcutta"
 
 
     };
@@ -99,6 +99,10 @@ public class StreamUrlManager {
     private static final String[] REMOVED_DEFAULT_STREAM_URLS = {
             "https://onlineradiofm.in/f7457fda-0a31-474f-b31a-3ba845be729b",
             "https://www.streamcontrol.net:8444/s/12010/"
+    };
+
+    private static final String[] REMOVED_DEFAULT_WEB_STREAM_URLS = {
+            "https://onlineradiobox.com/search?cs=uk.capitalfmuk&played=1&q=capital&radioid=1018&tzLoc=Asia%2FCalcutta"
     };
 
     private final SharedPreferences prefs;
@@ -137,7 +141,7 @@ public class StreamUrlManager {
         if (url == null || url.trim().isEmpty()) return;
         url = url.trim();
         List<String> current = getWebUrls();
-        if (!current.contains(url)) {
+        if (!containsEquivalentUrl(current, url)) {
             current.add(url);
             saveWebList(current);
         }
@@ -151,7 +155,7 @@ public class StreamUrlManager {
         for (String url : urls) {
             if (url == null) continue;
             url = url.trim();
-            if (!url.isEmpty() && !current.contains(url)) {
+            if (!url.isEmpty() && !containsEquivalentUrl(current, url)) {
                 current.add(url);
                 added++;
             }
@@ -186,13 +190,12 @@ public class StreamUrlManager {
     }
 
     private void saveList(List<String> list) {
-        // Preserve order via LinkedHashSet
-        LinkedHashSet<String> set = new LinkedHashSet<>(list);
+        LinkedHashSet<String> set = new LinkedHashSet<>(dedupeUrls(list));
         prefs.edit().putStringSet(KEY_URLS, set).apply();
     }
 
     private void saveWebList(List<String> list) {
-        LinkedHashSet<String> set = new LinkedHashSet<>(list);
+        LinkedHashSet<String> set = new LinkedHashSet<>(dedupeUrls(list));
         prefs.edit().putStringSet(KEY_WEB_URLS, set).apply();
     }
 
@@ -310,6 +313,9 @@ public class StreamUrlManager {
 
         List<String> current = getUrls();
         boolean changed = false;
+        int originalSize = current.size();
+        current = dedupeUrls(current);
+        changed = current.size() != originalSize;
         for (String removedUrl : REMOVED_DEFAULT_STREAM_URLS) {
             if (current.remove(removedUrl)) {
                 changed = true;
@@ -324,8 +330,16 @@ public class StreamUrlManager {
 
         List<String> webCurrent = getWebUrls();
         boolean webChanged = false;
+        int originalWebSize = webCurrent.size();
+        webCurrent = dedupeUrls(webCurrent);
+        webChanged = webCurrent.size() != originalWebSize;
+        for (String removedUrl : REMOVED_DEFAULT_WEB_STREAM_URLS) {
+            if (removeExactUrl(webCurrent, removedUrl)) {
+                webChanged = true;
+            }
+        }
         for (String url : DEFAULT_WEB_STREAM_URLS) {
-            if (!webCurrent.contains(url)) {
+            if (!containsEquivalentUrl(webCurrent, url)) {
                 webCurrent.add(url);
                 webChanged = true;
             }
@@ -343,5 +357,78 @@ public class StreamUrlManager {
             editor.putStringSet(KEY_WEB_URLS, set);
         }
         editor.apply();
+    }
+
+    private List<String> dedupeUrls(List<String> urls) {
+        List<String> deduped = new ArrayList<>();
+        if (urls == null || urls.isEmpty()) return deduped;
+
+        LinkedHashSet<String> seenKeys = new LinkedHashSet<>();
+        for (String url : urls) {
+            if (url == null) continue;
+            String cleaned = url.trim();
+            if (cleaned.isEmpty()) continue;
+            String key = duplicateKey(cleaned);
+            if (seenKeys.add(key)) {
+                deduped.add(cleaned);
+            }
+        }
+        return deduped;
+    }
+
+    private boolean containsEquivalentUrl(List<String> urls, String candidate) {
+        if (candidate == null || urls == null) return false;
+        String candidateKey = duplicateKey(candidate.trim());
+        for (String url : urls) {
+            if (url != null && duplicateKey(url.trim()).equals(candidateKey)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean removeExactUrl(List<String> urls, String candidate) {
+        if (candidate == null || urls == null) return false;
+        String candidateKey = normalizeExactUrl(candidate);
+        for (int i = 0; i < urls.size(); i++) {
+            String url = urls.get(i);
+            if (url != null && normalizeExactUrl(url).equals(candidateKey)) {
+                urls.remove(i);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String normalizeExactUrl(String url) {
+        if (url == null) return "";
+        String normalized = url.trim().toLowerCase();
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private String duplicateKey(String url) {
+        if (url == null) return "";
+        String cleaned = url.trim();
+        if (cleaned.isEmpty()) return "";
+        try {
+            Uri uri = Uri.parse(cleaned);
+            String host = uri.getHost();
+            if (host != null && host.toLowerCase().contains("onlineradiobox.com")) {
+                String stationCode = uri.getQueryParameter("cs");
+                if (stationCode != null && !stationCode.trim().isEmpty()) {
+                    return "onlineradiobox:" + stationCode.trim().toLowerCase();
+                }
+            }
+        } catch (Exception ignored) {
+        }
+
+        String normalized = cleaned.toLowerCase();
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
     }
 }

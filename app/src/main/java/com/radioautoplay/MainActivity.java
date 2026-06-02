@@ -13,17 +13,18 @@ import android.text.TextUtils;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -45,9 +46,9 @@ public class MainActivity extends AppCompatActivity {
     private TextView   tvStatus;
     private TextView   tvCurrentUrl;
     private Button     btnPlayStop;
-    private Switch     switchAppEnabled;
-    private Switch     switchShuffle;
-    private Switch     switchQuietHours;
+    private SwitchMaterial switchAppEnabled;
+    private SwitchMaterial switchShuffle;
+    private SwitchMaterial switchQuietHours;
     private EditText   etNewUrl;
     private RecyclerView rvUrls;
 
@@ -359,7 +360,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void clearIntroSounds() {
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle("Clear custom intro sounds?")
                 .setMessage("The bundled intro will still play when no custom intro is saved.")
                 .setPositiveButton("Clear", (d, w) -> {
@@ -433,7 +434,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void confirmDelete(int position) {
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle("Remove stream?")
                 .setMessage(urlList.get(position))
                 .setPositiveButton("Remove", (d, w) -> {
