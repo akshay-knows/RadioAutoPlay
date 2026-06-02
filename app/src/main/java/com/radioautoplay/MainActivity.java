@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.res.ColorStateList;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
@@ -20,6 +21,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -46,6 +48,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView   tvStatus;
     private TextView   tvCurrentUrl;
     private Button     btnPlayStop;
+    private AudioVisualizerView audioVisualizer;
     private SwitchMaterial switchAppEnabled;
     private SwitchMaterial switchShuffle;
     private SwitchMaterial switchQuietHours;
@@ -142,6 +145,7 @@ public class MainActivity extends AppCompatActivity {
         tvStatus      = findViewById(R.id.tv_status);
         tvCurrentUrl  = findViewById(R.id.tv_current_url);
         btnPlayStop   = findViewById(R.id.btn_play_stop);
+        audioVisualizer = findViewById(R.id.audio_visualizer);
         switchAppEnabled = findViewById(R.id.switch_app_enabled);
         switchShuffle = findViewById(R.id.switch_shuffle);
         switchQuietHours = findViewById(R.id.switch_quiet_hours);
@@ -264,6 +268,8 @@ public class MainActivity extends AppCompatActivity {
         tvStatus.setText("● Off");
         tvStatus.setTextColor(getResources().getColor(R.color.idle_grey));
         btnPlayStop.setText("▶  Play");
+        setPlayStopButtonTint(R.color.idle_button_bg);
+        audioVisualizer.setActive(false);
         tvCurrentUrl.setText("Radio AutoPlay is turned off");
         tvCurrentUrl.setVisibility(View.VISIBLE);
     }
@@ -479,12 +485,16 @@ public class MainActivity extends AppCompatActivity {
             tvStatus.setText("● LIVE");
             tvStatus.setTextColor(getResources().getColor(R.color.playing_green));
             btnPlayStop.setText("■  Stop");
+            setPlayStopButtonTint(R.color.stop_button_bg);
+            audioVisualizer.setActive(true);
             tvCurrentUrl.setText(url != null ? url : "");
             tvCurrentUrl.setVisibility(View.VISIBLE);
         } else if (status != null) {
             tvStatus.setText("● Starting");
             tvStatus.setTextColor(getResources().getColor(R.color.accent));
             btnPlayStop.setText("■  Stop");
+            setPlayStopButtonTint(R.color.stop_button_bg);
+            audioVisualizer.setActive(false);
             tvCurrentUrl.setText(url != null && !url.isEmpty() ? status + "\n" + url : status);
             tvCurrentUrl.setVisibility(View.VISIBLE);
         } else {
@@ -492,9 +502,16 @@ public class MainActivity extends AppCompatActivity {
             tvStatus.setTextColor(getResources().getColor(
                     error != null ? R.color.error_red : R.color.idle_grey));
             btnPlayStop.setText("▶  Play");
+            setPlayStopButtonTint(R.color.play_button_bg);
+            audioVisualizer.setActive(false);
             tvCurrentUrl.setVisibility(error != null ? View.VISIBLE : View.GONE);
             if (error != null) tvCurrentUrl.setText("Error: " + error);
         }
         adapter.setActiveIndex(urlManager.getActiveIndex());
+    }
+
+    private void setPlayStopButtonTint(int colorRes) {
+        ViewCompat.setBackgroundTintList(btnPlayStop,
+                ColorStateList.valueOf(ContextCompat.getColor(this, colorRes)));
     }
 }

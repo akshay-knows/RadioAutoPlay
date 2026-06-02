@@ -89,13 +89,19 @@
                     android:maxLines="2"
                     android:layout_marginBottom="12dp" />
 
+                <com.radioautoplay.AudioVisualizerView
+                    android:id="@+id/audio_visualizer"
+                    android:layout_width="match_parent"
+                    android:layout_height="54dp"
+                    android:layout_marginBottom="12dp" />
+
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_play_stop"
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
                     android:text="▶  Play"
                     android:textColor="@color/white"
-                    android:backgroundTint="@color/accent"
+                    android:backgroundTint="@color/play_button_bg"
                     android:textSize="15sp"
                     android:textStyle="bold" />
 
