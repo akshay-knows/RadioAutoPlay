@@ -25,6 +25,7 @@ import android.os.Looper;
 import android.os.PowerManager;
 import android.util.Log;
 import android.webkit.CookieManager;
+import android.webkit.ConsoleMessage;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -37,7 +38,6 @@ import androidx.core.app.NotificationCompat;
 import java.io.IOException;
 import java.util.Calendar;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
@@ -52,9 +52,9 @@ public class RadioService extends Service {
     private static final String CHANNEL_ID   = "radio_channel";
     private static final int    NOTIF_ID     = 1;
     private static final long   PLAYBACK_START_DELAY_MS = 40_000L;
-    private static final long   WEB_POST_LOAD_START_TIMEOUT_MS = 20_000L;
-    private static final long   WEB_HEALTHCHECK_INTERVAL_MS = 15_000L;
-    private static final int    WEB_AUTOPLAY_PROBE_ATTEMPTS = 20;
+    private static final long   WEB_START_RETRY_MS = 2_000L;
+    private static final long   WEB_SLOW_RETRY_MS = 8_000L;
+    private static final int    WEB_AUTOPLAY_PROBE_ATTEMPTS = 12;
     private static final long   STATUS_CHECK_INTERVAL_MS = 60_000L;
     private static final int    LOW_BATTERY_PERCENT = 20;
     private static final int    QUIET_HOURS_START_HOUR = 0;
@@ -84,7 +84,6 @@ public class RadioService extends Service {
     public static final String EXTRA_STATUS    = "status_msg";
 
     private MediaPlayer introPlayer;
-    private MediaPlayer waitingPlayer;
     private MediaPlayer offlinePlayer;
     private WebView webViewPlayer;
     private PowerManager.WakeLock wakeLock;
@@ -97,22 +96,15 @@ public class RadioService extends Service {
     private String currentUrl;
     private String activePlaybackUrl;
     private Runnable introStartDelay;
-    private Runnable streamStartTimeout;
-    private Runnable webPlaybackMonitor;
     private Runnable statusCheckRunnable;
     private boolean isPlaying = false;
     private boolean introFinished = false;
-    private boolean streamPrepared = false;
     private boolean webFallbackStarted = false;
     private boolean offlineMode = false;
     private boolean networkWasConnected = true;
     private boolean lowBatteryAnnounced = false;
-    private int failoverAttempts = 0;
     private int playbackRequestId = 0;
-    private int webSilentChecks = 0;
-    private int webNoMediaChecks = 0;
     private String lastRequestedUrl;
-    private int pendingWebRequestId = -1;
     private String pendingWebPageUrl;
     private final Random introRandom = new Random();
     private final AudioManager.OnAudioFocusChangeListener audioFocusChangeListener = focusChange -> { };
@@ -166,7 +158,6 @@ public class RadioService extends Service {
                     && (isPlaying
                     || webViewPlayer != null
                     || introPlayer != null
-                    || waitingPlayer != null
                     || offlinePlayer != null
                     || introStartDelay != null)) {
                 logInfo("Ignoring duplicate ACTION_PLAY for active url=" + url);
@@ -186,7 +177,6 @@ public class RadioService extends Service {
                     return START_STICKY;
                 }
                 logInfo("Starting playback requestId=" + (playbackRequestId + 1) + " url=" + url);
-                failoverAttempts = 0;
                 playbackRequestId++;
                 scheduleDelayedPlayback(url, playbackRequestId);
             }
@@ -263,7 +253,6 @@ public class RadioService extends Service {
         activePlaybackUrl = url;
         logInfo("startPlaybackAfterIntro requestId=" + requestId + " url=" + url);
         introFinished = false;
-        streamPrepared = false;
         startForeground(NOTIF_ID, buildNotification("Starting intro", url));
         broadcastState(false, null, "Starting intro and buffering stream");
 
@@ -342,9 +331,7 @@ public class RadioService extends Service {
     }
 
     private void startPlayback(String url, int requestId) {
-        cancelStreamWatchdog();
         releaseWebViewOnly();
-        streamPrepared = false;
         webFallbackStarted = false;
         if (requestId != playbackRequestId) return;
 
@@ -361,19 +348,14 @@ public class RadioService extends Service {
         if (requestId != playbackRequestId) return;
         if (webFallbackStarted) {
             logWarn("Web fallback already started. requestId=" + requestId + " reason=" + reason);
-            switchToAnotherStream(reason + ". Web player fallback also failed");
             return;
         }
 
-            webFallbackStarted = true;
-            streamPrepared = false;
-            requestAudioFocus();
-            if (introFinished) {
-                startWaitingLoop();
-            }
-            broadcastState(false, null, reason + ". Opening web player");
-            updateNotification("Opening web player", url);
-            logInfo("startWebPageFallback requestId=" + requestId + " url=" + url + " reason=" + reason);
+        webFallbackStarted = true;
+        requestAudioFocus();
+        broadcastState(false, null, reason + ". Opening web player");
+        updateNotification("Opening web player", url);
+        logInfo("startWebPageFallback requestId=" + requestId + " url=" + url + " reason=" + reason);
 
         handler.post(() -> {
             if (requestId != playbackRequestId) return;
@@ -390,9 +372,10 @@ public class RadioService extends Service {
             settings.setDomStorageEnabled(true);
             settings.setDatabaseEnabled(true);
             settings.setLoadsImagesAutomatically(true);
+            settings.setJavaScriptCanOpenWindowsAutomatically(true);
             settings.setLoadWithOverviewMode(false);
             settings.setUseWideViewPort(false);
-            settings.setMediaPlaybackRequiresUserGesture(!introFinished);
+            settings.setMediaPlaybackRequiresUserGesture(false);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
             }
@@ -405,13 +388,20 @@ public class RadioService extends Service {
                         currentUrl = title.trim();
                     }
                 }
+
+                @Override
+                public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
+                    if (consoleMessage != null) {
+                        logInfo("Web console: " + consoleMessage.message());
+                    }
+                    return true;
+                }
             });
 
             webViewPlayer.setWebViewClient(new WebViewClient() {
                 @Override
                 public void onPageFinished(WebView view, String pageUrl) {
                     if (requestId != playbackRequestId) return;
-                    pendingWebRequestId = requestId;
                     pendingWebPageUrl = pageUrl;
                     if (!introFinished) {
                         pauseAndMuteWebMedia(view);
@@ -420,7 +410,6 @@ public class RadioService extends Service {
                         logInfo("Web station preloaded requestId=" + requestId + " pageUrl=" + pageUrl);
                         return;
                     }
-                    resetStreamWatchdogForWebPlayback(requestId, pageUrl);
                     startWebAutoplayNow(view, pageUrl, requestId);
                 }
 
@@ -430,7 +419,7 @@ public class RadioService extends Service {
                             || (request != null && request.isForMainFrame());
                     if (requestId == playbackRequestId && isMainFrame) {
                         logWarn("Web page main-frame error requestId=" + requestId + " page=" + currentUrl);
-                        switchToAnotherStream("Web player page failed");
+                        handleWebPageFailed(requestId, "Web player page failed");
                     }
                 }
 
@@ -440,7 +429,7 @@ public class RadioService extends Service {
                     if (requestId == playbackRequestId) {
                         logWarn("Web page main-frame error requestId=" + requestId
                                 + " code=" + errorCode + " description=" + description);
-                        switchToAnotherStream("Web player page failed");
+                        handleWebPageFailed(requestId, "Web player page failed");
                     }
                 }
             });
@@ -465,12 +454,15 @@ public class RadioService extends Service {
 
     private void startWebAutoplayNow(WebView view, String pageUrl, int requestId) {
         if (requestId != playbackRequestId || view == null || isPlaying) return;
-        pendingWebRequestId = -1;
         pendingWebPageUrl = null;
+        requestAudioFocus();
+        view.setNetworkAvailable(true);
+        view.onResume();
+        view.resumeTimers();
         view.getSettings().setMediaPlaybackRequiresUserGesture(false);
-        injectAutoplayScript(view, pageUrl, false);
+        injectAutoplayScript(view, pageUrl);
         logInfo("Web autoplay start requestId=" + requestId + " pageUrl=" + pageUrl);
-        handler.postDelayed(() -> verifyWebPlaybackStarted(pageUrl, requestId, 0), 2_500L);
+        handler.postDelayed(() -> verifyWebPlaybackStarted(pageUrl, requestId, 0), WEB_START_RETRY_MS);
     }
 
     private void pauseAndMuteWebMedia(WebView view) {
@@ -485,30 +477,34 @@ public class RadioService extends Service {
         }
     }
 
-    private void injectAutoplayScript(WebView view, String targetUrl, boolean allowPagePlayer) {
+    private void injectAutoplayScript(WebView view, String targetUrl) {
         String stationCode = jsString(extractOnlineRadioBoxStationCode(targetUrl));
         String script = "(function(){"
                 + "var targetVolume=" + NORMALIZED_STREAM_VOLUME + ";"
                 + "var targetCode='" + stationCode + "';"
-                + "var allowPagePlayer=" + allowPagePlayer + ";"
-                + "function allMedia(){return [].slice.call(document.querySelectorAll('audio,video'));}"
-                + "function stopOtherMedia(keep){allMedia().forEach(function(m){try{if(m!==keep){m.pause&&m.pause();m.muted=true;m.volume=0;}}catch(e){}});}"
-                + "function attrs(e){var s='';try{s+=(e.id||'')+' '+(e.className||'')+' '+(e.href||'')+' '+(e.getAttribute('stream')||'')+' '+(e.getAttribute('data-stream')||'')+' '+(e.getAttribute('data-src')||'')+' '+(e.getAttribute('onclick')||'')+' '+(e.getAttribute('aria-label')||'')+' '+(e.title||'')+' '+((e.parentElement&&(e.parentElement.innerText||e.parentElement.getAttribute('href')||''))||'');}catch(e){}return s.toLowerCase();}"
-                + "function findTarget(){var candidates=[].slice.call(document.querySelectorAll('[stream],[data-stream],[data-src],button,a,[role=button],.play,.play-button,.jp-play,.mejs-playpause-button'));"
-                + "if(targetCode){for(var i=0;i<candidates.length;i++){if(attrs(candidates[i]).indexOf(targetCode)>=0)return candidates[i];}}"
-                + "return document.getElementById('set_radio_button')||candidates.find(function(e){return attrs(e).indexOf('play')>=0||attrs(e).indexOf('listen')>=0||attrs(e).indexOf('start')>=0;})||document.querySelector('[stream],[data-stream],[data-src]');}"
-                + "function streamOf(e){if(!e)return '';return e.getAttribute('stream')||e.getAttribute('data-stream')||e.getAttribute('data-src')||'';}"
-                + "function ownedAudio(src){var a=document.getElementById('radioautoplay_audio');if(!a){a=document.createElement('audio');a.id='radioautoplay_audio';a.controls=true;a.preload='auto';a.style.position='fixed';a.style.left='0';a.style.bottom='0';a.style.width='1px';a.style.height='1px';document.body.appendChild(a);}if(src&&a.src!==src){a.src=src;}return a;}"
-                + "function removeOwned(){var a=document.getElementById('radioautoplay_audio');if(a){try{a.pause();a.muted=true;a.volume=0;a.remove();}catch(e){}}}"
-                + "function playOne(){var target=findTarget();var src=streamOf(target);stopOtherMedia(null);if(allowPagePlayer){removeOwned();if(target){try{target.click();}catch(e){}}setTimeout(function(){var media=allMedia().filter(function(m){try{return !m.paused&&!m.ended;}catch(e){return false;}});var keep=media[0]||null;stopOtherMedia(keep);if(keep){try{keep.muted=false;keep.volume=targetVolume;}catch(e){}}},1500);return;}if(target&&!src){try{target.click();}catch(e){}}"
-                + "var owned=src?ownedAudio(src):document.getElementById('radioautoplay_audio');"
-                + "if(owned){try{stopOtherMedia(owned);owned.muted=false;owned.autoplay=true;owned.volume=targetVolume;owned.play&&owned.play();return;}catch(e){}}"
-                + "var media=allMedia().filter(function(m){try{return m.id!=='radioautoplay_audio'&&(m.src||m.currentSrc||m.querySelector('source'));}catch(e){return false;}});"
-                + "var chosen=media[0];if(chosen){try{stopOtherMedia(chosen);chosen.muted=false;chosen.autoplay=true;chosen.controls=true;chosen.volume=targetVolume;chosen.play&&chosen.play();}catch(e){}}"
+                + "function log(m){try{console.log('RadioAutoPlay '+m);}catch(e){}}"
+                + "function q(s){return [].slice.call(document.querySelectorAll(s));}"
+                + "function attr(e,n){try{return e.getAttribute(n)||'';}catch(x){return '';}}"
+                + "function cls(e){try{return typeof e.className==='string'?e.className:((e.className&&e.className.baseVal)||'');}catch(x){return '';}}"
+                + "function abs(src){src=(src||'').replace(/&amp;/g,'&').trim();if(!src)return '';if(src.indexOf('//')===0)return location.protocol+src;try{return new URL(src,location.href).href;}catch(e){return src;}}"
+                + "function allMedia(){return q('audio,video');}"
+                + "function stopOthers(keep){allMedia().forEach(function(m){try{if(m!==keep){m.pause();m.muted=true;m.volume=0;}}catch(e){}});}"
+                + "function alreadyPlaying(){return allMedia().some(function(m){try{return !m.paused&&!m.ended&&(m.readyState>0||m.currentTime>0);}catch(e){return false;}});}"
+                + "function text(e){try{return ((e.id||'')+' '+cls(e)+' '+(e.href||'')+' '+attr(e,'stream')+' '+attr(e,'data-stream')+' '+attr(e,'data-src')+' '+attr(e,'radioId')+' '+attr(e,'radioid')+' '+attr(e,'radioName')+' '+attr(e,'radioname')+' '+attr(e,'aria-label')+' '+attr(e,'title')+' '+attr(e,'onclick')+' '+((e.parentElement&&(e.parentElement.innerText||cls(e.parentElement)))||'')).toLowerCase();}catch(x){return '';}}"
+                + "function streamOf(e){if(!e)return '';var src=attr(e,'stream')||attr(e,'data-stream')||attr(e,'data-src')||attr(e,'src');if(!src&&e.currentSrc)src=e.currentSrc;if(!src){var s=e.querySelector&&e.querySelector('source[src]');if(s)src=attr(s,'src');}return abs(src);}"
+                + "function bad(s){return /close|next|prev|previous|share|facebook|twitter|googleplay|playmarket|appstore|download/.test(s);}"
+                + "function score(e){var s=text(e);if(bad(s))return -9999;var n=0;if(targetCode&&s.indexOf(targetCode)>=0)n+=1000;if(streamOf(e))n+=600;if(s.indexOf('station_play')>=0)n+=300;if(s.indexOf('b_top_play')>=0)n+=250;if(s.indexOf('button-play')>=0||s.indexOf('b-play')>=0)n+=220;if(s.indexOf('play')>=0)n+=120;if(s.indexOf('listen')>=0||s.indexOf('start')>=0)n+=80;return n;}"
+                + "function findTarget(){var items=q('audio,video,source,[stream],[data-stream],[data-src],#b_top_play,#play,.button-play,svg.button-play,.b-play,.station_play,button,a,[role=button],[id*=play],[class*=play]');var best=null,bestScore=-1;items.forEach(function(e){var s=score(e);if(s>bestScore){best=e;bestScore=s;}});return best||document.getElementById('set_radio_button')||document.getElementById('play')||q('audio,video')[0]||null;}"
+                + "function ownedAudio(src){var a=document.getElementById('radioautoplay_audio');if(!a){a=document.createElement('audio');a.id='radioautoplay_audio';a.controls=true;a.autoplay=true;a.preload='auto';a.style.position='fixed';a.style.left='0';a.style.bottom='0';a.style.width='1px';a.style.height='1px';document.body.appendChild(a);}if(src&&a.src!==src)a.src=src;return a;}"
+                + "function playMedia(m){if(!m)return false;try{stopOthers(m);m.muted=false;m.autoplay=true;m.controls=true;m.volume=targetVolume;var p=m.play&&m.play();if(p&&p.then)p.then(function(){window.radioAutoPlayStarted=true;log('media playing');}).catch(function(e){log('play rejected '+e);});return true;}catch(e){log('playMedia error '+e);return false;}}"
+                + "function clickTarget(e){if(!e)return;try{e.click();}catch(x){}try{e.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));}catch(x){}var p=e.closest&&e.closest('button,a,[role=button],.station_play,.b-play,.button-play');if(p&&p!==e){try{p.click();}catch(x){}}}"
+                + "function playExisting(){var media=allMedia().filter(function(m){try{return m.id!=='radioautoplay_audio'&&(m.src||m.currentSrc||m.querySelector('source[src]'));}catch(e){return false;}});return playMedia(media[0]);}"
+                + "function start(){if(window.radioAutoPlayStarted||alreadyPlaying()){window.radioAutoPlayStarted=true;return;}var target=findTarget();var src=streamOf(target);if(src){log('using stream '+src);playMedia(ownedAudio(src));return;}clickTarget(target);setTimeout(playExisting,300);setTimeout(playExisting,1200);}"
+                + "stopOthers(null);"
+                + "start();"
+                + "setTimeout(start,1500);"
+                + "setTimeout(start,3500);"
                 + "}"
-                + "playOne();"
-                + "setTimeout(playOne,1000);"
-                + "setTimeout(playOne,3000);"
                 + "})();";
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             view.evaluateJavascript(script, null);
@@ -523,9 +519,10 @@ public class RadioService extends Service {
                 "(function(){"
                         + "try{"
                         + "var media=[].slice.call(document.querySelectorAll('audio,video'));"
-                        + "var playing=media.some(function(m){return !m.paused&&!m.ended&&m.readyState>=2;});"
+                        + "var playing=!!window.radioAutoPlayStarted||media.some(function(m){try{return !m.paused&&!m.ended&&(m.readyState>0||m.currentTime>0);}catch(e){return false;}});"
                         + "var title=(document.title||'').trim();"
-                        + "return JSON.stringify({playing:playing,title:title,count:media.length});"
+                        + "var states=media.map(function(m){try{return {id:m.id||'',tag:m.tagName||'',paused:m.paused,ended:m.ended,readyState:m.readyState,currentTime:m.currentTime,src:m.currentSrc||m.src||''};}catch(e){return {};}});"
+                        + "return JSON.stringify({playing:playing,title:title,count:media.length,states:states});"
                         + "}catch(e){return JSON.stringify({playing:false,title:'',count:0});}"
                         + "})();";
         webViewPlayer.evaluateJavascript(probeScript, value -> {
@@ -537,8 +534,9 @@ public class RadioService extends Service {
                     + " attempt=" + attempt + " playing=" + playing + " mediaCount=" + mediaCount
                     + " payload=" + result);
             if (!playing && attempt < WEB_AUTOPLAY_PROBE_ATTEMPTS) {
-                injectAutoplayScript(webViewPlayer, pageUrl, attempt >= 2);
-                handler.postDelayed(() -> verifyWebPlaybackStarted(pageUrl, requestId, attempt + 1), 1_500L);
+                injectAutoplayScript(webViewPlayer, pageUrl);
+                handler.postDelayed(() -> verifyWebPlaybackStarted(pageUrl, requestId, attempt + 1),
+                        WEB_START_RETRY_MS);
                 return;
             }
             if (playing) {
@@ -546,39 +544,19 @@ public class RadioService extends Service {
             } else {
                 logWarn("Web playback not confirmed yet; staying in starting state requestId="
                         + requestId + " pageUrl=" + pageUrl);
-                broadcastState(false, null, "Starting stream");
-                updateNotification("Starting stream", currentUrl);
-                handler.postDelayed(() -> verifyWebPlaybackStarted(pageUrl, requestId, 0), 5_000L);
+                broadcastState(false, null, "Still starting web player");
+                updateNotification("Still starting", currentUrl);
+                handler.postDelayed(() -> verifyWebPlaybackStarted(pageUrl, requestId, 0),
+                        WEB_SLOW_RETRY_MS);
             }
         });
     }
 
-    private void resetStreamWatchdogForWebPlayback(int requestId, String pageUrl) {
-        cancelStreamWatchdog();
-        streamStartTimeout = () -> {
-            if (requestId == playbackRequestId && !isPlaying) {
-                // Do not auto-skip web station on timeout; keep attempting autoplay in-place.
-                logWarn("Web station start still pending after timeout; keeping current station. pageUrl=" + pageUrl);
-                if (webViewPlayer != null) {
-                    injectAutoplayScript(webViewPlayer, pageUrl, true);
-                }
-                handler.postDelayed(() -> resetStreamWatchdogForWebPlayback(requestId, pageUrl),
-                        WEB_POST_LOAD_START_TIMEOUT_MS);
-            }
-        };
-        handler.postDelayed(streamStartTimeout, WEB_POST_LOAD_START_TIMEOUT_MS);
-    }
-
     private void markWebPlaybackStarted(String pageUrl, int requestId, String pageTitle) {
         if (requestId != playbackRequestId || webViewPlayer == null || isPlaying) return;
-        cancelStreamWatchdog();
-        stopWaitingLoop();
         requestAudioFocus();
         isPlaying = true;
-        streamPrepared = true;
-        webSilentChecks = 0;
         applyWebAudioNormalizer();
-        urlManager.markStreamSuccess(activePlaybackUrl != null ? activePlaybackUrl : pageUrl);
         String station = getAnnouncementStationName(pageTitle, pageUrl);
         String displayUrl = activePlaybackUrl != null && !activePlaybackUrl.trim().isEmpty()
                 ? activePlaybackUrl : pageUrl;
@@ -587,7 +565,6 @@ public class RadioService extends Service {
                 + " displayUrl=" + displayUrl + " pageUrl=" + pageUrl);
         broadcastState(true, null, "Playing web player");
         updateNotification("Playing web player", station);
-        startWebPlaybackMonitor(requestId);
     }
 
     private String extractWebTitle(String jsonValue) {
@@ -621,53 +598,6 @@ public class RadioService extends Service {
         return value.replace("\\", "\\\\").replace("'", "\\'");
     }
 
-    private void startWebPlaybackMonitor(int requestId) {
-        cancelWebPlaybackMonitor();
-        webPlaybackMonitor = new Runnable() {
-            @Override
-            public void run() {
-                if (requestId != playbackRequestId || webViewPlayer == null || !isPlaying) return;
-                String script =
-                        "(function(){"
-                                + "try{"
-                                + "var media=[].slice.call(document.querySelectorAll('audio,video'));"
-                                + "var playing=media.some(function(m){return !m.paused&&!m.ended&&m.readyState>=2;});"
-                                + "return JSON.stringify({playing:playing,count:media.length});"
-                                + "}catch(e){return '0';}"
-                                + "})();";
-                webViewPlayer.evaluateJavascript(script, value -> {
-                    if (requestId != playbackRequestId || webViewPlayer == null || !isPlaying) return;
-                    String payload = value == null ? "" : value;
-                    boolean playing = payload.contains("\"playing\":true");
-                    int mediaCount = extractWebMediaCount(payload);
-                    if (playing) {
-                        webSilentChecks = 0;
-                        webNoMediaChecks = 0;
-                    } else {
-                        injectAutoplayScript(webViewPlayer,
-                                activePlaybackUrl != null ? activePlaybackUrl : currentUrl, true);
-                        if (mediaCount > 0) {
-                            webSilentChecks++;
-                        } else {
-                            webNoMediaChecks++;
-                        }
-                    }
-                    handler.postDelayed(this, WEB_HEALTHCHECK_INTERVAL_MS);
-                });
-            }
-        };
-        handler.postDelayed(webPlaybackMonitor, WEB_HEALTHCHECK_INTERVAL_MS);
-    }
-
-    private void cancelWebPlaybackMonitor() {
-        if (handler != null && webPlaybackMonitor != null) {
-            handler.removeCallbacks(webPlaybackMonitor);
-            webPlaybackMonitor = null;
-        }
-        webSilentChecks = 0;
-        webNoMediaChecks = 0;
-    }
-
     private int extractWebMediaCount(String jsonValue) {
         if (jsonValue == null) return 0;
         String raw = jsonValue.replace("\\\"", "\"");
@@ -693,15 +623,11 @@ public class RadioService extends Service {
     private void stopPlayback(boolean broadcastIdle) {
         isPlaying = false;
         introFinished = false;
-        streamPrepared = false;
         webFallbackStarted = false;
         offlineMode = false;
         activePlaybackUrl = null;
-        cancelWebPlaybackMonitor();
         cancelIntroStartDelay();
-        cancelStreamWatchdog();
         releaseIntroPlayerOnly();
-        stopWaitingLoop();
         stopOfflineFallback(false);
         releaseWebViewOnly();
         if (broadcastIdle) {
@@ -710,55 +636,17 @@ public class RadioService extends Service {
         abandonAudioFocus();
     }
 
-    private void switchToAnotherStream(String reason) {
-        cancelStreamWatchdog();
-        logWarn("switchToAnotherStream reason=" + reason + " currentUrl=" + currentUrl
-                + " activePlaybackUrl=" + activePlaybackUrl + " failoverAttempts=" + failoverAttempts);
-        urlManager.markStreamFailure(activePlaybackUrl != null ? activePlaybackUrl : currentUrl);
-        releaseWebViewOnly();
-
-        List<String> urls = urlManager.getAutoPlaybackUrls();
-        if (urls.size() <= 1) {
-            broadcastState(false, reason + ". No backup stream is saved.");
-            updateNotification("No backup stream", currentUrl);
-            stopSelf();
-            return;
-        }
-
-        failoverAttempts++;
-        if (failoverAttempts >= urls.size()) {
-            broadcastState(false, "All saved streams failed to start.");
-            updateNotification("All streams failed", currentUrl);
-            stopSelf();
-            return;
-        }
-
-        String nextUrl = urlManager.getNextUrl();
-        if (nextUrl == null || nextUrl.equals(currentUrl)) {
-            broadcastState(false, "No different backup stream is available.");
-            updateNotification("No backup stream", currentUrl);
-            stopSelf();
-            return;
-        }
-
-        playbackRequestId++;
-        currentUrl = nextUrl;
-        activePlaybackUrl = nextUrl;
-        introFinished = true;
-        streamPrepared = false;
-        webFallbackStarted = false;
-        releaseIntroPlayerOnly();
-        broadcastState(false, null, reason + ". Trying another stream");
-        updateNotification("Trying backup stream", nextUrl);
-        startWaitingLoop();
-        startPlayback(nextUrl, playbackRequestId);
+    private void handleWebPageFailed(int requestId, String reason) {
+        if (requestId != playbackRequestId) return;
+        broadcastState(false, reason, "Web player page failed");
+        updateNotification("Web page failed", currentUrl);
     }
 
     private Map<String, String> createPlayerHeaders() {
         Map<String, String> headers = new LinkedHashMap<>();
-        headers.put("User-Agent", "Mozilla/5.0 (Linux; Android 13) RadioAutoPlay/1.0");
-        headers.put("Accept", "audio/mpeg,audio/aac,audio/ogg,audio/*;q=0.9,video/*;q=0.4,*/*;q=0.1");
-        headers.put("Icy-MetaData", "1");
+        headers.put("User-Agent", "Mozilla/5.0 (Linux; Android 13; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
+        headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8");
+        headers.put("Upgrade-Insecure-Requests", "1");
         return headers;
     }
 
@@ -778,7 +666,6 @@ public class RadioService extends Service {
                 Log.e(TAG, "Error releasing web player", e);
             }
         }
-        cancelWebPlaybackMonitor();
     }
 
     private void releaseIntroPlayerOnly() {
@@ -798,13 +685,6 @@ public class RadioService extends Service {
         if (handler != null && introStartDelay != null) {
             handler.removeCallbacks(introStartDelay);
             introStartDelay = null;
-        }
-    }
-
-    private void cancelStreamWatchdog() {
-        if (handler != null && streamStartTimeout != null) {
-            handler.removeCallbacks(streamStartTimeout);
-            streamStartTimeout = null;
         }
     }
 
@@ -852,23 +732,6 @@ public class RadioService extends Service {
         }
     }
 
-    private void startWaitingLoop() {
-        // Waiting music disabled by user request.
-    }
-
-    private void stopWaitingLoop() {
-        if (waitingPlayer != null) {
-            try {
-                if (waitingPlayer.isPlaying()) waitingPlayer.stop();
-                waitingPlayer.reset();
-                waitingPlayer.release();
-            } catch (Exception e) {
-                Log.e(TAG, "Error releasing waiting player", e);
-            }
-            waitingPlayer = null;
-        }
-    }
-
     private void startStatusAnnouncements() {
         statusCheckRunnable = new Runnable() {
             @Override
@@ -891,8 +754,7 @@ public class RadioService extends Service {
 
     private void stopForQuietHoursIfNeeded() {
         if (!isQuietHoursNow()) return;
-        if (!isPlaying && introPlayer == null
-                && waitingPlayer == null && offlinePlayer == null) return;
+        if (!isPlaying && introPlayer == null && offlinePlayer == null) return;
 
         broadcastState(false, null, "Quiet hours started. Playback paused until 6:00 AM");
         updateNotification("Quiet hours", currentUrl);
@@ -952,10 +814,8 @@ public class RadioService extends Service {
         playbackRequestId++;
         stopPlayback(false);
         offlineMode = true;
-        stopWaitingLoop();
         currentUrl = "Offline backup audio";
         introFinished = true;
-        streamPrepared = false;
         webFallbackStarted = false;
         isPlaying = false;
         startForeground(NOTIF_ID, buildNotification("Offline backup playing", currentUrl));
@@ -1010,7 +870,6 @@ public class RadioService extends Service {
                 return;
             }
             logInfo("Resuming radio after reconnect url=" + lastRequestedUrl);
-            failoverAttempts = 0;
             playbackRequestId++;
             startPlaybackAfterIntro(lastRequestedUrl, playbackRequestId);
         }

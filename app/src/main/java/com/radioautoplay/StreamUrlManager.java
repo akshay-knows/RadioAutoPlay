@@ -29,9 +29,7 @@ public class StreamUrlManager {
     private static final String KEY_DEFAULTS_VERSION = "default_streams_version";
     private static final String KEY_WEB_URLS = "web_stream_urls";
     private static final String KEY_WEB_STATIONS_DEFAULT = "web_stations_default";
-    private static final String KEY_FAILED_UNTIL_PREFIX = "failed_until_";
-    private static final int DEFAULT_STREAMS_VERSION = 7;
-    private static final long FAILED_SKIP_MS = 30 * 60 * 1000L;
+    private static final int DEFAULT_STREAMS_VERSION = 8;
 
     private static final String[] DEFAULT_WEB_STREAM_URLS = {
             "https://onlineradiofm.in/stations/mirchi",
@@ -281,34 +279,8 @@ public class StreamUrlManager {
         prefs.edit().putBoolean(KEY_WEB_STATIONS_DEFAULT, enabled).apply();
     }
 
-    public void markStreamFailure(String url) {
-        if (url == null || url.trim().isEmpty()) return;
-        prefs.edit()
-                .putLong(KEY_FAILED_UNTIL_PREFIX + url, System.currentTimeMillis() + FAILED_SKIP_MS)
-                .apply();
-    }
-
-    public void markStreamSuccess(String url) {
-        if (url == null || url.trim().isEmpty()) return;
-        prefs.edit().remove(KEY_FAILED_UNTIL_PREFIX + url).apply();
-    }
-
     public List<String> getAutoPlaybackUrls() {
-        List<String> preferred = getWebUrls();
-        List<String> available = filterTemporarilyFailed(preferred);
-        if (!available.isEmpty()) return available;
-        return preferred;
-    }
-
-    private List<String> filterTemporarilyFailed(List<String> urls) {
-        List<String> available = new ArrayList<>();
-        long now = System.currentTimeMillis();
-        for (String url : urls) {
-            if (prefs.getLong(KEY_FAILED_UNTIL_PREFIX + url, 0L) <= now) {
-                available.add(url);
-            }
-        }
-        return available;
+        return getWebUrls();
     }
 
     private void syncDefaultStreamsIfNeeded() {

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Radio AutoPlay</string>
-    <string name="changelog_v1_1">v1.15\n- Removed voice announcements completely\n- Uses WebView webpage playback for saved stations instead of direct stream conversion\n- Preloads the webpage player during the intro and starts it immediately after intro finishes\n- Removed old direct stream defaults and dead playback code</string>
+    <string name="changelog_v1_1">v1.16\n- Simplified webpage playback so one hidden WebView controls one station\n- Removed waiting-audio leftovers, auto-skip failover, and failed-link hiding\n- Uses browser-style webpage headers for OnlineRadioBox and OnlineRadioFM links\n- Keeps retrying the same web player gently instead of restarting or overlapping streams</string>
 </resources>
