@@ -60,7 +60,7 @@ public class RadioService extends Service {
     private static final String TAG          = "RadioService";
     private static final String CHANNEL_ID   = "radio_channel";
     private static final int    NOTIF_ID     = 1;
-    private static final long   PLAYBACK_START_DELAY_MS = 2_000L;
+    private static final long   PLAYBACK_START_DELAY_MS = 40_000L;
     private static final long   STREAM_START_TIMEOUT_MS = 17_000L;
     private static final long   WEB_POST_LOAD_START_TIMEOUT_MS = 20_000L;
     private static final long   WEB_HEALTHCHECK_INTERVAL_MS = 15_000L;
@@ -242,9 +242,14 @@ public class RadioService extends Service {
         offlineMode = false;
         currentUrl = url;
         activePlaybackUrl = url;
-        startForeground(NOTIF_ID, buildNotification("Starting in 2 seconds", url));
-        broadcastState(false, null, "Starting in 2 seconds");
-        logInfo("Delaying playback start by " + PLAYBACK_START_DELAY_MS + "ms requestId="
+        long startDelayMs = urlManager != null && urlManager.isStartDelayEnabled()
+                ? PLAYBACK_START_DELAY_MS : 0L;
+        String delayStatus = startDelayMs > 0
+                ? "Starting in " + (startDelayMs / 1000L) + " seconds"
+                : "Starting now";
+        startForeground(NOTIF_ID, buildNotification(delayStatus, url));
+        broadcastState(false, null, delayStatus);
+        logInfo("Delaying playback start by " + startDelayMs + "ms requestId="
                 + requestId + " url=" + url);
 
         introStartDelay = () -> {
@@ -267,7 +272,11 @@ public class RadioService extends Service {
             }
             startPlaybackAfterIntro(url, requestId);
         };
-        handler.postDelayed(introStartDelay, PLAYBACK_START_DELAY_MS);
+        if (startDelayMs > 0) {
+            handler.postDelayed(introStartDelay, startDelayMs);
+        } else {
+            handler.post(introStartDelay);
+        }
     }
 
     private void startPlaybackAfterIntro(String url, int requestId) {

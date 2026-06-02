@@ -39,7 +39,19 @@ public class AudioVisualizerView extends View {
     public void setActive(boolean active) {
         if (this.active == active) return;
         this.active = active;
-        invalidate();
+        if (active) {
+            postInvalidateOnAnimation();
+        } else {
+            invalidate();
+        }
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        if (active) {
+            postInvalidateOnAnimation();
+        }
     }
 
     @Override

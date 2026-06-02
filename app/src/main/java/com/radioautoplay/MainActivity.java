@@ -50,6 +50,8 @@ public class MainActivity extends AppCompatActivity {
     private Button     btnPlayStop;
     private AudioVisualizerView audioVisualizer;
     private SwitchMaterial switchAppEnabled;
+    private SwitchMaterial switchStartDelay;
+    private SwitchMaterial switchVisualizer;
     private SwitchMaterial switchShuffle;
     private SwitchMaterial switchQuietHours;
     private EditText   etNewUrl;
@@ -109,6 +111,8 @@ public class MainActivity extends AppCompatActivity {
         setupRecyclerView();
         setupControls();
         refreshAppEnabledSwitch();
+        refreshStartDelaySwitch();
+        refreshVisualizerSwitch();
         refreshShuffleSwitch();
         refreshQuietHoursSwitch();
         requestNotificationPermissionIfNeeded();
@@ -124,6 +128,8 @@ public class MainActivity extends AppCompatActivity {
         IntentFilter filter = new IntentFilter(RadioService.BROADCAST_STATE);
         ContextCompat.registerReceiver(this, serviceReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
         refreshAppEnabledSwitch();
+        refreshStartDelaySwitch();
+        refreshVisualizerSwitch();
         refreshList();
     }
 
@@ -147,6 +153,8 @@ public class MainActivity extends AppCompatActivity {
         btnPlayStop   = findViewById(R.id.btn_play_stop);
         audioVisualizer = findViewById(R.id.audio_visualizer);
         switchAppEnabled = findViewById(R.id.switch_app_enabled);
+        switchStartDelay = findViewById(R.id.switch_start_delay);
+        switchVisualizer = findViewById(R.id.switch_visualizer);
         switchShuffle = findViewById(R.id.switch_shuffle);
         switchQuietHours = findViewById(R.id.switch_quiet_hours);
         etNewUrl      = findViewById(R.id.et_new_url);
@@ -232,6 +240,21 @@ public class MainActivity extends AppCompatActivity {
                     Toast.LENGTH_SHORT).show();
         });
 
+        switchStartDelay.setOnCheckedChangeListener((btn, checked) -> {
+            urlManager.setStartDelayEnabled(checked);
+            Toast.makeText(this,
+                    checked ? "40-second start delay ON" : "Start delay OFF",
+                    Toast.LENGTH_SHORT).show();
+        });
+
+        switchVisualizer.setOnCheckedChangeListener((btn, checked) -> {
+            urlManager.setVisualizerEnabled(checked);
+            setVisualizerActive(checked && serviceRunning);
+            Toast.makeText(this,
+                    checked ? "Visualizer ON" : "Visualizer OFF",
+                    Toast.LENGTH_SHORT).show();
+        });
+
         // Shuffle switch
         switchShuffle.setOnCheckedChangeListener((btn, checked) -> {
             urlManager.setShuffleEnabled(checked);
@@ -269,9 +292,20 @@ public class MainActivity extends AppCompatActivity {
         tvStatus.setTextColor(getResources().getColor(R.color.idle_grey));
         btnPlayStop.setText("▶  Play");
         setPlayStopButtonTint(R.color.idle_button_bg);
-        audioVisualizer.setActive(false);
+        setVisualizerActive(false);
         tvCurrentUrl.setText("Radio AutoPlay is turned off");
         tvCurrentUrl.setVisibility(View.VISIBLE);
+    }
+
+    private void refreshStartDelaySwitch() {
+        switchStartDelay.setChecked(urlManager.isStartDelayEnabled());
+    }
+
+    private void refreshVisualizerSwitch() {
+        boolean enabled = urlManager.isVisualizerEnabled();
+        switchVisualizer.setChecked(enabled);
+        audioVisualizer.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        setVisualizerActive(enabled && serviceRunning);
     }
 
     private void refreshShuffleSwitch() {
@@ -486,7 +520,7 @@ public class MainActivity extends AppCompatActivity {
             tvStatus.setTextColor(getResources().getColor(R.color.playing_green));
             btnPlayStop.setText("■  Stop");
             setPlayStopButtonTint(R.color.stop_button_bg);
-            audioVisualizer.setActive(true);
+            setVisualizerActive(true);
             tvCurrentUrl.setText(url != null ? url : "");
             tvCurrentUrl.setVisibility(View.VISIBLE);
         } else if (status != null) {
@@ -494,7 +528,7 @@ public class MainActivity extends AppCompatActivity {
             tvStatus.setTextColor(getResources().getColor(R.color.accent));
             btnPlayStop.setText("■  Stop");
             setPlayStopButtonTint(R.color.stop_button_bg);
-            audioVisualizer.setActive(false);
+            setVisualizerActive(true);
             tvCurrentUrl.setText(url != null && !url.isEmpty() ? status + "\n" + url : status);
             tvCurrentUrl.setVisibility(View.VISIBLE);
         } else {
@@ -503,11 +537,17 @@ public class MainActivity extends AppCompatActivity {
                     error != null ? R.color.error_red : R.color.idle_grey));
             btnPlayStop.setText("▶  Play");
             setPlayStopButtonTint(R.color.play_button_bg);
-            audioVisualizer.setActive(false);
+            setVisualizerActive(false);
             tvCurrentUrl.setVisibility(error != null ? View.VISIBLE : View.GONE);
             if (error != null) tvCurrentUrl.setText("Error: " + error);
         }
         adapter.setActiveIndex(urlManager.getActiveIndex());
+    }
+
+    private void setVisualizerActive(boolean active) {
+        boolean enabled = urlManager != null && urlManager.isVisualizerEnabled();
+        audioVisualizer.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        audioVisualizer.setActive(enabled && active);
     }
 
     private void setPlayStopButtonTint(int colorRes) {

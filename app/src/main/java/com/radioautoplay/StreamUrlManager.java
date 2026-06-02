@@ -23,6 +23,8 @@ public class StreamUrlManager {
     private static final String KEY_APP_ENABLED  = "app_enabled";
     private static final String KEY_SHUFFLE      = "shuffle_mode";
     private static final String KEY_QUIET_HOURS  = "quiet_hours_enabled";
+    private static final String KEY_START_DELAY  = "start_delay_enabled";
+    private static final String KEY_VISUALIZER   = "visualizer_enabled";
     private static final String KEY_DEFAULTS_ADDED = "default_streams_added";
     private static final String KEY_DEFAULTS_VERSION = "default_streams_version";
     private static final String KEY_WEB_URLS = "web_stream_urls";
@@ -259,6 +261,22 @@ public class StreamUrlManager {
 
     public void setQuietHoursEnabled(boolean enabled) {
         prefs.edit().putBoolean(KEY_QUIET_HOURS, enabled).apply();
+    }
+
+    public boolean isStartDelayEnabled() {
+        return prefs.getBoolean(KEY_START_DELAY, true);
+    }
+
+    public void setStartDelayEnabled(boolean enabled) {
+        prefs.edit().putBoolean(KEY_START_DELAY, enabled).apply();
+    }
+
+    public boolean isVisualizerEnabled() {
+        return prefs.getBoolean(KEY_VISUALIZER, true);
+    }
+
+    public void setVisualizerEnabled(boolean enabled) {
+        prefs.edit().putBoolean(KEY_VISUALIZER, enabled).apply();
     }
 
     public boolean isEmpty() {
