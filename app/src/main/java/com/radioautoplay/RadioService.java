@@ -13,7 +13,6 @@ import android.content.IntentFilter;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
-import android.media.audiofx.LoudnessEnhancer;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
@@ -24,7 +23,6 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
-import android.speech.tts.TextToSpeech;
 import android.util.Log;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
@@ -36,22 +34,13 @@ import android.webkit.WebViewClient;
 
 import androidx.core.app.NotificationCompat;
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.text.SimpleDateFormat;
 import java.util.Calendar;
-import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Foreground service that manages MediaPlayer for radio streaming.
@@ -63,17 +52,14 @@ public class RadioService extends Service {
     private static final String CHANNEL_ID   = "radio_channel";
     private static final int    NOTIF_ID     = 1;
     private static final long   PLAYBACK_START_DELAY_MS = 40_000L;
-    private static final long   STREAM_START_TIMEOUT_MS = 17_000L;
     private static final long   WEB_POST_LOAD_START_TIMEOUT_MS = 20_000L;
     private static final long   WEB_HEALTHCHECK_INTERVAL_MS = 15_000L;
     private static final int    WEB_AUTOPLAY_PROBE_ATTEMPTS = 20;
-    private static final int    MAX_HTML_SCAN_BYTES = 512 * 1024;
     private static final long   STATUS_CHECK_INTERVAL_MS = 60_000L;
     private static final int    LOW_BATTERY_PERCENT = 20;
     private static final int    QUIET_HOURS_START_HOUR = 0;
     private static final int    QUIET_HOURS_END_HOUR = 6;
     private static final float  NORMALIZED_STREAM_VOLUME = 0.82f;
-    private static final int    LOUDNESS_ENHANCER_GAIN_MB = 450;
     private static final int[] BUNDLED_INTRO_SOUNDS = {
             R.raw.playstation_3_slim,
             R.raw.samsung_galaxy_on,
@@ -97,11 +83,9 @@ public class RadioService extends Service {
     public static final String EXTRA_ERROR     = "error_msg";
     public static final String EXTRA_STATUS    = "status_msg";
 
-    private MediaPlayer mediaPlayer;
     private MediaPlayer introPlayer;
     private MediaPlayer waitingPlayer;
     private MediaPlayer offlinePlayer;
-    private LoudnessEnhancer loudnessEnhancer;
     private WebView webViewPlayer;
     private PowerManager.WakeLock wakeLock;
     private WifiManager.WifiLock  wifiLock;
@@ -110,7 +94,6 @@ public class RadioService extends Service {
     private DiagnosticsLogger diagnosticsLogger;
     private Handler handler;
     private AudioManager audioManager;
-    private TextToSpeech textToSpeech;
     private String currentUrl;
     private String activePlaybackUrl;
     private Runnable introStartDelay;
@@ -122,12 +105,10 @@ public class RadioService extends Service {
     private boolean streamPrepared = false;
     private boolean webFallbackStarted = false;
     private boolean offlineMode = false;
-    private boolean ttsReady = false;
     private boolean networkWasConnected = true;
     private boolean lowBatteryAnnounced = false;
     private int failoverAttempts = 0;
     private int playbackRequestId = 0;
-    private int lastTimeAnnouncementKey = -1;
     private int webSilentChecks = 0;
     private int webNoMediaChecks = 0;
     private String lastRequestedUrl;
@@ -160,7 +141,6 @@ public class RadioService extends Service {
         audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
         createNotificationChannel();
         acquireLocks();
-        initTextToSpeech();
         registerStatusReceiver();
         startStatusAnnouncements();
     }
@@ -184,7 +164,6 @@ public class RadioService extends Service {
             }
             if (url != null && url.equals(activePlaybackUrl)
                     && (isPlaying
-                    || mediaPlayer != null
                     || webViewPlayer != null
                     || introPlayer != null
                     || waitingPlayer != null
@@ -227,10 +206,6 @@ public class RadioService extends Service {
     public void onDestroy() {
         stopPlayback(false);
         unregisterStatusReceiver();
-        if (textToSpeech != null) {
-            textToSpeech.shutdown();
-            textToSpeech = null;
-        }
         releaseLocks();
         super.onDestroy();
     }
@@ -254,10 +229,6 @@ public class RadioService extends Service {
         broadcastState(false, null, delayStatus);
         logInfo("Delaying playback start by " + startDelayMs + "ms requestId="
                 + requestId + " url=" + url);
-        if (startDelayMs > 0) {
-            handler.postDelayed(() -> announceStartupStatus(url, requestId), 1_200L);
-        }
-
         introStartDelay = () -> {
             introStartDelay = null;
             if (requestId != playbackRequestId) return;
@@ -276,7 +247,6 @@ public class RadioService extends Service {
                 stopSelf();
                 return;
             }
-            stopVoiceAlert();
             startPlaybackAfterIntro(url, requestId);
         };
         if (startDelayMs > 0) {
@@ -368,16 +338,11 @@ public class RadioService extends Service {
             startDeferredWebAutoplay(requestId);
             return;
         }
-        if (streamPrepared && mediaPlayer != null) {
-            startPreparedStream(requestId);
-        } else {
-            startPlayback(url, requestId);
-        }
+        startPlayback(url, requestId);
     }
 
     private void startPlayback(String url, int requestId) {
         cancelStreamWatchdog();
-        releaseMediaPlayerOnly();
         releaseWebViewOnly();
         streamPrepared = false;
         webFallbackStarted = false;
@@ -387,103 +352,8 @@ public class RadioService extends Service {
         activePlaybackUrl = url;
         logInfo("startPlayback requestId=" + requestId + " url=" + url);
 
-        if (urlManager.isWebStreamUrl(url)) {
-            if (!introFinished) {
-                logInfo("Deferring web station page load until intro finishes requestId=" + requestId + " url=" + url);
-                broadcastState(false, null, "Waiting for intro");
-                updateNotification("Waiting for intro", url);
-                return;
-            }
-            cancelStreamWatchdog();
-            startForeground(NOTIF_ID, buildNotification("Resolving web station", url));
-            broadcastState(false, null, "Resolving web station");
-            new Thread(() -> {
-                StreamSource source = resolveStreamSource(url);
-                handler.post(() -> {
-                    if (requestId != playbackRequestId || isPlaying) return;
-                    if (isLikelyDirectStreamSource(url, source)) {
-                        logInfo("Resolved webpage station to direct stream requestId=" + requestId
-                                + " playUrl=" + source.playUrl + " displayUrl=" + source.displayUrl);
-                        openResolvedPlayback(source, requestId);
-                    } else {
-                        startWebPageFallback(url, requestId, "Opening web station");
-                    }
-                });
-            }, "WebStreamResolver").start();
-            return;
-        }
-
-        streamStartTimeout = () -> {
-            if (requestId == playbackRequestId && !isPlaying && !streamPrepared) {
-                Log.w(TAG, "Stream did not start within 17 seconds: " + currentUrl);
-                logWarn("Direct stream timeout requestId=" + requestId + " url=" + currentUrl);
-                startWebPageFallback(currentUrl, requestId, "Direct stream did not start in 17 seconds");
-            }
-        };
-        handler.postDelayed(streamStartTimeout, STREAM_START_TIMEOUT_MS);
-        startForeground(NOTIF_ID, buildNotification("Resolving stream", url));
-        broadcastState(false, null, "Resolving stream");
-
-        new Thread(() -> {
-            StreamSource source = resolveStreamSource(url);
-            handler.post(() -> {
-                if (requestId == playbackRequestId && !isPlaying) {
-                    openResolvedPlayback(source, requestId);
-                }
-            });
-        }, "StreamResolver").start();
-    }
-
-    private void openResolvedPlayback(StreamSource source, int requestId) {
-        releaseMediaPlayerOnly();
-        if (requestId != playbackRequestId) return;
-
-        currentUrl = buildDisplayText(source.stationName, source.displayUrl);
-        logInfo("openResolvedPlayback requestId=" + requestId + " source=" + source.playUrl);
-        try {
-            mediaPlayer = new MediaPlayer();
-
-            setPlayerAudioMode(mediaPlayer);
-            mediaPlayer.setOnPreparedListener(mp -> {
-                if (requestId != playbackRequestId) return;
-                cancelStreamWatchdog();
-                streamPrepared = true;
-                logInfo("MediaPlayer prepared requestId=" + requestId + " introFinished=" + introFinished);
-                if (introFinished) {
-                    startPreparedStream(requestId);
-                } else {
-                    broadcastState(false, null, "Stream ready, finishing intro");
-                    updateNotification("Stream ready", currentUrl);
-                }
-            });
-
-            mediaPlayer.setOnErrorListener((mp, what, extra) -> {
-                logError("MediaPlayer error requestId=" + requestId + " what=" + what + " extra=" + extra, null);
-                isPlaying = false;
-                if (requestId == playbackRequestId) {
-                    startWebPageFallback(source.displayUrl, requestId, "Stream error (code " + what + ")");
-                }
-                return true;
-            });
-
-            mediaPlayer.setOnInfoListener((mp, what, extra) -> {
-                Log.d(TAG, "MediaPlayer info: " + what);
-                return false;
-            });
-            mediaPlayer.setDataSource(getApplicationContext(), Uri.parse(source.playUrl), source.headers);
-            mediaPlayer.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
-            applyDirectAudioNormalizer(mediaPlayer);
-            mediaPlayer.prepareAsync(); // non-blocking
-
-            // Show "connecting…" notification immediately
-            String displayName = !source.stationName.isEmpty() ? source.stationName : source.displayUrl;
-            startForeground(NOTIF_ID, buildNotification("Connecting", displayName));
-            broadcastState(false, null, "Connecting to music");
-
-        } catch (Exception e) {
-            logError("Error setting up MediaPlayer requestId=" + requestId, e);
-            startWebPageFallback(source.displayUrl, requestId, "Cannot open stream");
-        }
+        String reason = introFinished ? "Opening web station" : "Preloading web station";
+        startWebPageFallback(url, requestId, reason);
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -497,7 +367,6 @@ public class RadioService extends Service {
 
             webFallbackStarted = true;
             streamPrepared = false;
-            releaseMediaPlayerOnly();
             requestAudioFocus();
             if (introFinished) {
                 startWaitingLoop();
@@ -523,7 +392,7 @@ public class RadioService extends Service {
             settings.setLoadsImagesAutomatically(true);
             settings.setLoadWithOverviewMode(false);
             settings.setUseWideViewPort(false);
-            settings.setMediaPlaybackRequiresUserGesture(false);
+            settings.setMediaPlaybackRequiresUserGesture(!introFinished);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
             }
@@ -542,6 +411,15 @@ public class RadioService extends Service {
                 @Override
                 public void onPageFinished(WebView view, String pageUrl) {
                     if (requestId != playbackRequestId) return;
+                    pendingWebRequestId = requestId;
+                    pendingWebPageUrl = pageUrl;
+                    if (!introFinished) {
+                        pauseAndMuteWebMedia(view);
+                        broadcastState(false, null, "Web station loaded, finishing intro");
+                        updateNotification("Web station ready", pageUrl);
+                        logInfo("Web station preloaded requestId=" + requestId + " pageUrl=" + pageUrl);
+                        return;
+                    }
                     resetStreamWatchdogForWebPlayback(requestId, pageUrl);
                     startWebAutoplayNow(view, pageUrl, requestId);
                 }
@@ -586,8 +464,10 @@ public class RadioService extends Service {
     }
 
     private void startWebAutoplayNow(WebView view, String pageUrl, int requestId) {
+        if (requestId != playbackRequestId || view == null || isPlaying) return;
         pendingWebRequestId = -1;
         pendingWebPageUrl = null;
+        view.getSettings().setMediaPlaybackRequiresUserGesture(false);
         injectAutoplayScript(view, pageUrl, false);
         logInfo("Web autoplay start requestId=" + requestId + " pageUrl=" + pageUrl);
         handler.postDelayed(() -> verifyWebPlaybackStarted(pageUrl, requestId, 0), 2_500L);
@@ -811,7 +691,6 @@ public class RadioService extends Service {
     }
 
     private void stopPlayback(boolean broadcastIdle) {
-        stopVoiceAlert();
         isPlaying = false;
         introFinished = false;
         streamPrepared = false;
@@ -825,16 +704,6 @@ public class RadioService extends Service {
         stopWaitingLoop();
         stopOfflineFallback(false);
         releaseWebViewOnly();
-        if (mediaPlayer != null) {
-            try {
-                if (mediaPlayer.isPlaying()) mediaPlayer.stop();
-                mediaPlayer.reset();
-                mediaPlayer.release();
-            } catch (Exception e) {
-                Log.e(TAG, "Error releasing player", e);
-            }
-            mediaPlayer = null;
-        }
         if (broadcastIdle) {
             broadcastState(false, null);
         }
@@ -846,14 +715,12 @@ public class RadioService extends Service {
         logWarn("switchToAnotherStream reason=" + reason + " currentUrl=" + currentUrl
                 + " activePlaybackUrl=" + activePlaybackUrl + " failoverAttempts=" + failoverAttempts);
         urlManager.markStreamFailure(activePlaybackUrl != null ? activePlaybackUrl : currentUrl);
-        releaseMediaPlayerOnly();
         releaseWebViewOnly();
 
         List<String> urls = urlManager.getAutoPlaybackUrls();
         if (urls.size() <= 1) {
             broadcastState(false, reason + ". No backup stream is saved.");
             updateNotification("No backup stream", currentUrl);
-            speakVoiceAlert(reason + ". No backup stream is saved.", null);
             stopSelf();
             return;
         }
@@ -862,7 +729,6 @@ public class RadioService extends Service {
         if (failoverAttempts >= urls.size()) {
             broadcastState(false, "All saved streams failed to start.");
             updateNotification("All streams failed", currentUrl);
-            speakVoiceAlert("Unable to play stream. All saved streams failed to start.", null);
             stopSelf();
             return;
         }
@@ -871,7 +737,6 @@ public class RadioService extends Service {
         if (nextUrl == null || nextUrl.equals(currentUrl)) {
             broadcastState(false, "No different backup stream is available.");
             updateNotification("No backup stream", currentUrl);
-            speakVoiceAlert("Unable to play stream. No different backup stream is available.", null);
             stopSelf();
             return;
         }
@@ -889,275 +754,12 @@ public class RadioService extends Service {
         startPlayback(nextUrl, playbackRequestId);
     }
 
-    private StreamSource resolveStreamSource(String url) {
-        Map<String, String> playerHeaders = createPlayerHeaders();
-        HttpURLConnection connection = null;
-        String knownDirectStream = StreamUrlManager.getKnownDirectStreamForUrl(url);
-        if (!knownDirectStream.isEmpty()) {
-            Map<String, String> sourceHeaders = createPlayerHeaders();
-            sourceHeaders.put("Referer", url);
-            return new StreamSource(knownDirectStream, url, sourceHeaders,
-                    StreamUrlManager.getRadioNameForUrl(url));
-        }
-
-        try {
-            connection = (HttpURLConnection) new URL(url).openConnection();
-            connection.setConnectTimeout(12_000);
-            connection.setReadTimeout(12_000);
-            connection.setInstanceFollowRedirects(true);
-            connection.setRequestProperty("User-Agent", playerHeaders.get("User-Agent"));
-            connection.setRequestProperty("Accept", playerHeaders.get("Accept"));
-            connection.setRequestProperty("Icy-MetaData", "1");
-
-            String contentType = connection.getContentType();
-            String finalUrl = connection.getURL().toString();
-            if (!isHtmlContent(contentType)) {
-                return new StreamSource(finalUrl, finalUrl, playerHeaders,
-                        StreamUrlManager.getRadioNameForUrl(finalUrl));
-            }
-
-            String html = readSmallTextResponse(connection.getInputStream());
-            OnlineRadioBoxStation onlineRadioBoxStation = extractOnlineRadioBoxStation(finalUrl, html);
-            if (onlineRadioBoxStation != null) {
-                Log.d(TAG, "Resolved OnlineRadioBox station to media source: "
-                        + onlineRadioBoxStation.streamUrl);
-                Map<String, String> sourceHeaders = createPlayerHeaders();
-                sourceHeaders.put("Referer", finalUrl);
-                return new StreamSource(onlineRadioBoxStation.streamUrl, finalUrl, sourceHeaders,
-                        onlineRadioBoxStation.name);
-            }
-
-            String sourceUrl = extractMediaSourceUrl(finalUrl, html);
-            if (sourceUrl != null) {
-                Log.d(TAG, "Resolved HTML player page to media source: " + sourceUrl);
-                Map<String, String> sourceHeaders = createPlayerHeaders();
-                sourceHeaders.put("Referer", finalUrl);
-                return new StreamSource(sourceUrl, finalUrl, sourceHeaders,
-                        StreamUrlManager.getRadioNameForUrl(finalUrl));
-            }
-
-            Log.w(TAG, "HTML page did not expose a media source. Retrying URL with audio headers.");
-            return new StreamSource(finalUrl, finalUrl, playerHeaders,
-                    StreamUrlManager.getRadioNameForUrl(finalUrl));
-        } catch (Exception e) {
-            Log.w(TAG, "Could not pre-resolve stream URL. Trying direct playback.", e);
-            return new StreamSource(url, url, playerHeaders, StreamUrlManager.getRadioNameForUrl(url));
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
-        }
-    }
-
-    private void startPreparedStream(int requestId) {
-        if (requestId != playbackRequestId || mediaPlayer == null || isPlaying) return;
-        stopWaitingLoop();
-        releaseIntroPlayerOnly();
-        requestAudioFocus();
-        startPreparedStreamAfterAnnouncement(requestId);
-    }
-
-    private void startPreparedStreamAfterAnnouncement(int requestId) {
-        if (requestId != playbackRequestId || mediaPlayer == null || isPlaying) return;
-        try {
-            mediaPlayer.start();
-            isPlaying = true;
-            logInfo("Direct playback started requestId=" + requestId + " url=" + currentUrl);
-            urlManager.markStreamSuccess(activePlaybackUrl != null ? activePlaybackUrl : currentUrl);
-            broadcastState(true, null);
-            updateNotification("Playing", currentUrl);
-            Log.d(TAG, "Playback started");
-        } catch (Exception e) {
-            logError("Prepared stream could not start requestId=" + requestId + " url=" + currentUrl, e);
-            switchToAnotherStream("Unable to play stream");
-        }
-    }
-
     private Map<String, String> createPlayerHeaders() {
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put("User-Agent", "Mozilla/5.0 (Linux; Android 13) RadioAutoPlay/1.0");
         headers.put("Accept", "audio/mpeg,audio/aac,audio/ogg,audio/*;q=0.9,video/*;q=0.4,*/*;q=0.1");
         headers.put("Icy-MetaData", "1");
         return headers;
-    }
-
-    private boolean isHtmlContent(String contentType) {
-        return contentType != null && contentType.toLowerCase(Locale.US).contains("html");
-    }
-
-    private String readSmallTextResponse(InputStream inputStream) throws IOException {
-        try (BufferedInputStream in = new BufferedInputStream(inputStream);
-             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            byte[] buffer = new byte[4096];
-            int total = 0;
-            int read;
-            while ((read = in.read(buffer)) != -1 && total < MAX_HTML_SCAN_BYTES) {
-                int allowed = Math.min(read, MAX_HTML_SCAN_BYTES - total);
-                out.write(buffer, 0, allowed);
-                total += allowed;
-            }
-            return out.toString("UTF-8");
-        }
-    }
-
-    private String extractMediaSourceUrl(String baseUrl, String html) {
-        if (html == null || html.isEmpty()) return null;
-
-        String onlineRadioBoxStream = extractOnlineRadioBoxStream(baseUrl, html);
-        if (onlineRadioBoxStream != null) {
-            return onlineRadioBoxStream;
-        }
-
-        Pattern mediaSourcePattern = Pattern.compile(
-                "(?i)<(?:audio|video|source)[^>]+src\\s*=\\s*['\"]([^'\"]+)['\"]");
-        Matcher matcher = mediaSourcePattern.matcher(html);
-        if (matcher.find()) {
-            return resolveHtmlUrl(baseUrl, matcher.group(1));
-        }
-
-        Pattern playerStreamAttributePattern = Pattern.compile(
-                "(?i)\\b(?:data-stream|stream|data-src)\\s*=\\s*['\"]([^'\"]+)['\"]");
-        matcher = playerStreamAttributePattern.matcher(html);
-        while (matcher.find()) {
-            String candidate = matcher.group(1);
-            if (looksLikePlayableStream(candidate)) {
-                return resolveHtmlUrl(baseUrl, candidate);
-            }
-        }
-
-        Pattern scriptUrlPattern = Pattern.compile(
-                "(?i)['\"](https?://[^'\"]+(?:mp3|aac|m3u8|stream|icecast\\.audio|/proxy/)[^'\"]*)['\"]");
-        matcher = scriptUrlPattern.matcher(html);
-        if (matcher.find()) {
-            return resolveHtmlUrl(baseUrl, matcher.group(1));
-        }
-
-        Pattern relativeUrlPattern = Pattern.compile(
-                "(?i)['\"]([^'\"]*(?:mp3|aac|m3u8|stream|icecast\\.audio|/proxy/)[^'\"]*)['\"]");
-        matcher = relativeUrlPattern.matcher(html);
-        if (matcher.find()) {
-            return resolveHtmlUrl(baseUrl, matcher.group(1));
-        }
-
-        return null;
-    }
-
-    private OnlineRadioBoxStation extractOnlineRadioBoxStation(String baseUrl, String html) {
-        String streamUrl = extractOnlineRadioBoxStream(baseUrl, html);
-        if (streamUrl == null || streamUrl.trim().isEmpty()) return null;
-
-        String stationName = StreamUrlManager.getRadioNameForUrl(baseUrl);
-        String titleStationName = cleanStationName(extractHtmlTitle(html));
-        if (!titleStationName.isEmpty() && !titleStationName.equals("your radio station")) {
-            stationName = titleStationName;
-        }
-        stationName = cleanStationName(stationName);
-        return new OnlineRadioBoxStation(streamUrl, stationName);
-    }
-
-    private String extractHtmlTitle(String html) {
-        if (html == null || html.isEmpty()) return "";
-        Pattern titlePattern = Pattern.compile("(?is)<title>\\s*([^<]+?)\\s*</title>");
-        Matcher matcher = titlePattern.matcher(html);
-        if (!matcher.find()) return "";
-        String title = htmlDecode(matcher.group(1)).replaceAll("\\s+", " ").trim();
-        int divider = title.indexOf('|');
-        if (divider > 0) {
-            title = title.substring(0, divider).trim();
-        }
-        return title;
-    }
-
-    private String htmlDecode(String value) {
-        if (value == null) return "";
-        return value.replace("&amp;", "&")
-                .replace("&quot;", "\"")
-                .replace("&#34;", "\"")
-                .replace("&#39;", "'")
-                .replace("&apos;", "'")
-                .replace("&nbsp;", " ")
-                .trim();
-    }
-
-    private String extractOnlineRadioBoxStream(String baseUrl, String html) {
-        String stationCode = extractOnlineRadioBoxStationCode(baseUrl);
-        if (stationCode.isEmpty()) return null;
-
-        String quotedCode = Pattern.quote(stationCode);
-        Pattern radioIdThenStream = Pattern.compile(
-                "(?is)<[^>]+radioId\\s*=\\s*['\"]" + quotedCode
-                        + "['\"][^>]+stream\\s*=\\s*['\"]([^'\"]+)['\"]");
-        Matcher matcher = radioIdThenStream.matcher(html);
-        if (matcher.find()) {
-            return resolveHtmlUrl(baseUrl, matcher.group(1));
-        }
-
-        Pattern streamThenRadioId = Pattern.compile(
-                "(?is)<[^>]+stream\\s*=\\s*['\"]([^'\"]+)['\"][^>]+radioId\\s*=\\s*['\"]"
-                        + quotedCode + "['\"]");
-        matcher = streamThenRadioId.matcher(html);
-        if (matcher.find()) {
-            return resolveHtmlUrl(baseUrl, matcher.group(1));
-        }
-
-        return null;
-    }
-
-    private boolean looksLikePlayableStream(String value) {
-        if (value == null) return false;
-        String cleaned = value.replace("&amp;", "&").toLowerCase(Locale.US);
-        return cleaned.startsWith("http://")
-                || cleaned.startsWith("https://")
-                || cleaned.startsWith("//")
-                || cleaned.contains(".mp3")
-                || cleaned.contains(".aac")
-                || cleaned.contains(".m3u8")
-                || cleaned.contains("/stream")
-                || cleaned.contains("/livestream")
-                || cleaned.contains("icecast")
-                || cleaned.contains("streamtheworld")
-                || cleaned.contains("/proxy/");
-    }
-
-    private String resolveHtmlUrl(String baseUrl, String value) {
-        try {
-            String cleaned = value.replace("&amp;", "&").trim();
-            return new URL(new URL(baseUrl), cleaned).toString();
-        } catch (Exception e) {
-            Log.w(TAG, "Could not resolve media source URL", e);
-            return value;
-        }
-    }
-
-    private boolean isLikelyDirectStreamSource(String originalUrl, StreamSource source) {
-        if (source == null || source.playUrl == null || source.playUrl.trim().isEmpty()) return false;
-        String playUrl = source.playUrl.trim().toLowerCase(Locale.US);
-        String original = originalUrl == null ? "" : originalUrl.trim().toLowerCase(Locale.US);
-
-        if (playUrl.equals(original)) return false;
-
-        return playUrl.contains(".mp3")
-                || playUrl.contains(".aac")
-                || playUrl.contains(".m3u8")
-                || playUrl.contains("/stream")
-                || playUrl.contains("/icecast")
-                || playUrl.contains("audio")
-                || playUrl.contains("radio");
-    }
-
-    private void releaseMediaPlayerOnly() {
-        if (mediaPlayer != null) {
-            try {
-                releaseLoudnessEnhancer();
-                if (mediaPlayer.isPlaying()) mediaPlayer.stop();
-                mediaPlayer.reset();
-                mediaPlayer.release();
-            } catch (Exception e) {
-                Log.e(TAG, "Error releasing player", e);
-            }
-            mediaPlayer = null;
-        }
-        isPlaying = false;
     }
 
     private void releaseWebViewOnly() {
@@ -1236,183 +838,6 @@ public class RadioService extends Service {
         audioManager.abandonAudioFocus(audioFocusChangeListener);
     }
 
-    // ── Voice announcements ──────────────────────────────────────────────────
-
-    private void initTextToSpeech() {
-        textToSpeech = new TextToSpeech(getApplicationContext(), status -> {
-            if (status == TextToSpeech.SUCCESS && textToSpeech != null) {
-                int result = textToSpeech.setLanguage(Locale.US);
-                ttsReady = result != TextToSpeech.LANG_MISSING_DATA
-                        && result != TextToSpeech.LANG_NOT_SUPPORTED;
-                textToSpeech.setSpeechRate(0.92f);
-                textToSpeech.setPitch(1.02f);
-            } else {
-                ttsReady = false;
-                Log.w(TAG, "TextToSpeech initialization failed");
-            }
-        });
-    }
-
-    private void speakVoiceAlert(String message, Runnable afterDone) {
-        logInfo("Voice alert: " + message);
-        if (!ttsReady || textToSpeech == null || message == null || message.trim().isEmpty()) {
-            if (afterDone != null) handler.post(afterDone);
-            return;
-        }
-
-        final boolean[] finished = {false};
-        if (afterDone != null) {
-            handler.postDelayed(() -> {
-                if (!finished[0]) {
-                    finished[0] = true;
-                    restoreMusicVolume();
-                    afterDone.run();
-                }
-            }, 8_000L);
-        }
-
-        duckMusicVolume();
-
-        String utteranceId = "voice_" + System.currentTimeMillis();
-        textToSpeech.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
-            @Override
-            public void onStart(String id) { }
-
-            @Override
-            public void onDone(String id) {
-                handler.post(() -> {
-                    if (finished[0]) return;
-                    finished[0] = true;
-                    restoreMusicVolume();
-                    if (afterDone != null) {
-                        afterDone.run();
-                    }
-                });
-            }
-
-            @Override
-            public void onError(String id) {
-                handler.post(() -> {
-                    if (finished[0]) return;
-                    finished[0] = true;
-                    restoreMusicVolume();
-                    if (afterDone != null) {
-                        afterDone.run();
-                    }
-                });
-            }
-        });
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            android.os.Bundle params = new android.os.Bundle();
-            textToSpeech.speak(message, TextToSpeech.QUEUE_FLUSH, params, utteranceId);
-        } else {
-            java.util.HashMap<String, String> params = new java.util.HashMap<>();
-            params.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId);
-            //noinspection deprecation
-            textToSpeech.speak(message, TextToSpeech.QUEUE_FLUSH, params);
-        }
-    }
-
-    private void announceStartupStatus(String url, int requestId) {
-        announceStartupStatus(url, requestId, 0);
-    }
-
-    private void announceStartupStatus(String url, int requestId, int attempt) {
-        if (requestId != playbackRequestId || offlineMode || offlinePlayer != null || isPlaying) return;
-        if (urlManager != null && !urlManager.isAppEnabled()) return;
-        if (isQuietHoursNow()) return;
-        if ((!ttsReady || textToSpeech == null) && attempt < 8) {
-            handler.postDelayed(() -> announceStartupStatus(url, requestId, attempt + 1), 2_000L);
-            return;
-        }
-
-        String stationName = StreamUrlManager.getRadioNameForUrl(url);
-        String battery = getBatteryAnnouncement();
-        String message = "Welcome to Bathroom Audio Player. "
-                + getNetworkAnnouncement() + " Current time is " + formatCurrentTime()
-                + ". " + battery + " Selected radio is " + stationName
-                + ". Music will start shortly.";
-        speakVoiceAlert(message, null);
-    }
-
-    private String getNetworkAnnouncement() {
-        ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
-        NetworkInfo info = cm != null ? cm.getActiveNetworkInfo() : null;
-        if (info != null && info.isConnected()) {
-            if (info.getType() == ConnectivityManager.TYPE_WIFI) {
-                return "Wi-Fi is connected.";
-            }
-            return "Internet is connected. Wi-Fi is not connected.";
-        }
-        return "Wi-Fi is not connected.";
-    }
-
-    private String getBatteryAnnouncement() {
-        int batteryPercent = getBatteryPercent();
-        if (batteryPercent < 0) {
-            return "Battery percentage is not available.";
-        }
-        return "Battery is " + batteryPercent + " percent.";
-    }
-
-    private int getBatteryPercent() {
-        Intent battery = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-        if (battery == null) return -1;
-        int level = battery.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-        int scale = battery.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
-        if (level < 0 || scale <= 0) return -1;
-        return Math.round((level * 100f) / scale);
-    }
-
-    private String formatCurrentTime() {
-        return new SimpleDateFormat("h:mm a", Locale.US).format(new Date());
-    }
-
-    private void stopVoiceAlert() {
-        if (textToSpeech != null) {
-            try {
-                textToSpeech.stop();
-            } catch (Exception e) {
-                Log.w(TAG, "Could not stop voice alert", e);
-            }
-        }
-        restoreMusicVolume();
-    }
-
-    private void applyDirectAudioNormalizer(MediaPlayer player) {
-        if (player == null) return;
-        try {
-            player.setVolume(NORMALIZED_STREAM_VOLUME, NORMALIZED_STREAM_VOLUME);
-        } catch (Exception e) {
-            Log.w(TAG, "Could not set normalized stream volume", e);
-        }
-
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) return;
-        releaseLoudnessEnhancer();
-        try {
-            loudnessEnhancer = new LoudnessEnhancer(player.getAudioSessionId());
-            loudnessEnhancer.setTargetGain(LOUDNESS_ENHANCER_GAIN_MB);
-            loudnessEnhancer.setEnabled(true);
-            logInfo("Direct stream normalizer enabled. gainMb=" + LOUDNESS_ENHANCER_GAIN_MB
-                    + " volume=" + NORMALIZED_STREAM_VOLUME);
-        } catch (Exception e) {
-            loudnessEnhancer = null;
-            Log.w(TAG, "Could not enable direct stream normalizer", e);
-        }
-    }
-
-    private void releaseLoudnessEnhancer() {
-        if (loudnessEnhancer == null) return;
-        try {
-            loudnessEnhancer.setEnabled(false);
-            loudnessEnhancer.release();
-        } catch (Exception e) {
-            Log.w(TAG, "Could not release loudness enhancer", e);
-        }
-        loudnessEnhancer = null;
-    }
-
     private void applyWebAudioNormalizer() {
         if (webViewPlayer == null) return;
         try {
@@ -1444,52 +869,11 @@ public class RadioService extends Service {
         }
     }
 
-    private void restoreMusicVolume() {
-        if (mediaPlayer != null && isPlaying) {
-            try {
-                mediaPlayer.setVolume(NORMALIZED_STREAM_VOLUME, NORMALIZED_STREAM_VOLUME);
-            } catch (Exception e) {
-                Log.w(TAG, "Could not restore stream volume", e);
-            }
-        }
-        if (webViewPlayer != null && isPlaying) {
-            try {
-                webViewPlayer.evaluateJavascript(
-                        "(function(){var targetVolume=" + NORMALIZED_STREAM_VOLUME
-                                + ";var m=[].slice.call(document.querySelectorAll('audio,video'));"
-                                + "m.forEach(function(x){try{x.volume=targetVolume;x.muted=false;}catch(e){}});})();",
-                        null);
-            } catch (Exception e) {
-                Log.w(TAG, "Could not restore web stream volume", e);
-            }
-        }
-    }
-
-    private void duckMusicVolume() {
-        if (mediaPlayer != null && isPlaying) {
-            try {
-                mediaPlayer.setVolume(0.28f, 0.28f);
-            } catch (Exception e) {
-                Log.w(TAG, "Could not duck stream for announcement", e);
-            }
-        }
-        if (webViewPlayer != null && isPlaying) {
-            try {
-                webViewPlayer.evaluateJavascript(
-                        "(function(){var m=[].slice.call(document.querySelectorAll('audio,video'));m.forEach(function(x){x.volume=0.22;});})();",
-                        null);
-            } catch (Exception e) {
-                Log.w(TAG, "Could not duck web stream for announcement", e);
-            }
-        }
-    }
-
     private void startStatusAnnouncements() {
         statusCheckRunnable = new Runnable() {
             @Override
             public void run() {
                 stopForQuietHoursIfNeeded();
-                announceTimeIfNeeded();
                 handleNetworkStatus();
                 Intent battery = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
                 if (battery != null) handleBatteryStatus(battery);
@@ -1507,19 +891,14 @@ public class RadioService extends Service {
 
     private void stopForQuietHoursIfNeeded() {
         if (!isQuietHoursNow()) return;
-        if (!isPlaying && mediaPlayer == null && introPlayer == null
+        if (!isPlaying && introPlayer == null
                 && waitingPlayer == null && offlinePlayer == null) return;
 
         broadcastState(false, null, "Quiet hours started. Playback paused until 6:00 AM");
         updateNotification("Quiet hours", currentUrl);
-        speakVoiceAlert("Quiet hours started. Playback is paused until 6 A M.", null);
         playbackRequestId++;
         stopPlayback(false);
         stopSelf();
-    }
-
-    private void announceTimeIfNeeded() {
-        // Intentionally no-op now: frequent TTS announcements were disrupting long-running playback.
     }
 
     private void registerStatusReceiver() {
@@ -1571,7 +950,6 @@ public class RadioService extends Service {
 
     private void startOfflineFallback(String reason) {
         playbackRequestId++;
-        stopVoiceAlert();
         stopPlayback(false);
         offlineMode = true;
         stopWaitingLoop();
@@ -1707,15 +1085,6 @@ public class RadioService extends Service {
         return cleaned;
     }
 
-    private String buildDisplayText(String stationName, String url) {
-        String cleanedStation = cleanStationName(stationName);
-        if (cleanedStation.isEmpty() || cleanedStation.equals("your radio station")) {
-            return url != null ? url : "";
-        }
-        if (url == null || url.trim().isEmpty()) return cleanedStation;
-        return cleanedStation + "\n" + url;
-    }
-
     // ── Locks ─────────────────────────────────────────────────────────────────
 
     private void acquireLocks() {
@@ -1801,31 +1170,4 @@ public class RadioService extends Service {
         return url.length() > 50 ? url.substring(0, 47) + "…" : url;
     }
 
-    private static class StreamSource {
-        final String playUrl;
-        final String displayUrl;
-        final Map<String, String> headers;
-        final String stationName;
-
-        StreamSource(String playUrl, String displayUrl, Map<String, String> headers) {
-            this(playUrl, displayUrl, headers, "");
-        }
-
-        StreamSource(String playUrl, String displayUrl, Map<String, String> headers, String stationName) {
-            this.playUrl = playUrl;
-            this.displayUrl = displayUrl;
-            this.headers = headers;
-            this.stationName = stationName != null ? stationName : "";
-        }
-    }
-
-    private static class OnlineRadioBoxStation {
-        final String streamUrl;
-        final String name;
-
-        OnlineRadioBoxStation(String streamUrl, String name) {
-            this.streamUrl = streamUrl;
-            this.name = name != null ? name : "";
-        }
-    }
 }

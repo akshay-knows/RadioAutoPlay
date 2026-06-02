@@ -30,32 +30,8 @@ public class StreamUrlManager {
     private static final String KEY_WEB_URLS = "web_stream_urls";
     private static final String KEY_WEB_STATIONS_DEFAULT = "web_stations_default";
     private static final String KEY_FAILED_UNTIL_PREFIX = "failed_until_";
-    private static final int DEFAULT_STREAMS_VERSION = 6;
+    private static final int DEFAULT_STREAMS_VERSION = 7;
     private static final long FAILED_SKIP_MS = 30 * 60 * 1000L;
-
-    private static final String[] DEFAULT_STREAM_URLS = {
-            "https://stream.live.vc.bbcmedia.co.uk/bbc_world_service",
-            "https://eu8.fastcast4u.com/proxy/clyedupq?mp=%2F1?aw_0_req_lsid=2c0fae177108c9a42a7cf24878625444",
-            "https://stream.zeno.fm/dbstwo3dvhhtv",
-            "https://stream.zeno.fm/6quh1pfnt1duv",
-            "https://s8.voscast.com:7021/stream",
-            "https://drive.uber.radio/uber-app/bollywooddance/icecast.audio",
-            "https://srv01.onlineradio.voaplus.com/kissfm",
-            "https://server.mixify.in:8010/radio.mp3",
-            "https://live.cmr24.net/CMR/Desi_Music-MQ/icecast.audio",
-            "https://ice42.securenetsystems.net/KQBK?playSessionID=893715E2-D578-F731-09E75DFFEE53C84F",
-            "https://stream.zeno.fm/a2gyqzwpwfeuv",
-            "http://stream.zenolive.com/rqqps6cbe3quv.html",
-            "https://uksoutha.streaming.broadcast.radio/awazfm",
-            "https://cp11.serverse.com/proxy/foxfm/stream",
-            "https://media-ssl.musicradio.com/HeartLondon",
-            "https://media-ssl.musicradio.com/Capital",
-            "https://virgin.live.stream.broadcasting.news/stream",
-            "https://ice8.securenetsystems.net/EASY96",
-            "https://npr-ice.streamguys1.com/live.mp3",
-            "https://apnews.cdnstream1.com/apnews",
-            "https://tunein.cdnstream1.com/3519_96.mp3"
-    };
 
     private static final String[] DEFAULT_WEB_STREAM_URLS = {
             "https://onlineradiofm.in/stations/mirchi",
@@ -95,11 +71,6 @@ public class StreamUrlManager {
 
     };
 
-    private static final String[] REMOVED_DEFAULT_STREAM_URLS = {
-            "https://onlineradiofm.in/f7457fda-0a31-474f-b31a-3ba845be729b",
-            "https://www.streamcontrol.net:8444/s/12010/"
-    };
-
     private static final String[] REMOVED_DEFAULT_WEB_STREAM_URLS = {
             "https://onlineradiobox.com/search?cs=uk.capitalfmuk&played=1&q=capital&radioid=1018&tzLoc=Asia%2FCalcutta",
             "https://onlineradiobox.com/in/?cs=in.ndtv&played=1",
@@ -124,9 +95,8 @@ public class StreamUrlManager {
 
     // ── URL list ──────────────────────────────────────────────────────────────
 
-    public List<String> getUrls() {
+    private List<String> getLegacyDirectUrls() {
         Set<String> set = prefs.getStringSet(KEY_URLS, new LinkedHashSet<>());
-        // LinkedHashSet preserves insertion order
         return new ArrayList<>(set);
     }
 
@@ -189,11 +159,6 @@ public class StreamUrlManager {
             current.set(index, newUrl.trim());
             saveWebList(current);
         }
-    }
-
-    private void saveList(List<String> list) {
-        LinkedHashSet<String> set = new LinkedHashSet<>(dedupeUrls(list));
-        prefs.edit().putStringSet(KEY_URLS, set).apply();
     }
 
     private void saveWebList(List<String> list) {
@@ -283,10 +248,6 @@ public class StreamUrlManager {
         return getAllPlaybackUrls().isEmpty();
     }
 
-    public boolean isWebStreamUrl(String url) {
-        return url != null && getWebUrls().contains(url);
-    }
-
     public static String getRadioNameForUrl(String url) {
         String onlineRadioBoxName = getKnownOnlineRadioBoxName(url);
         if (!onlineRadioBoxName.isEmpty()) return onlineRadioBoxName;
@@ -309,47 +270,6 @@ public class StreamUrlManager {
             return titleCase(host.replace("www.", "").replace(".", " "));
         } catch (Exception ignored) {
             return "Radio station";
-        }
-    }
-
-    public static String getKnownDirectStreamForUrl(String url) {
-        String code = getOnlineRadioBoxStationCode(url);
-        if (code.isEmpty()) return "";
-        switch (code) {
-            case "ca.cbcrtoronto":
-                return "https://playerservices.streamtheworld.com/api/livestream-redirect/CBLAFM_CBC.mp3?dist=onlineradiobox";
-            case "in.aajtak":
-                return "https://tunein.cdnstream1.com/4530_128_2.mp3";
-            case "in.air":
-                return "https://air.pc.cdn.bitgravity.com/air/live/pbaudio163/playlist.m3u8";
-            case "in.easy60s":
-                return "https://streaming.exclusive.radio/uber/easy60/icecast.audio";
-            case "in.karanaujla":
-                return "https://stream.zeno.fm/vrqrkmrfkzzuv";
-            case "in.ndtv":
-                return "https://ndtv24x7elemarchana.akamaized.net/hls/live/2003678/ndtv24x7/ndtv24x7master.m3u8";
-            case "za.hindvaniradio":
-                return "https://edge.iono.fm/xice/129_medium.aac";
-            case "in.ndtvindia":
-                return "https://ndtvindiaelemarchana.akamaized.net/hls/live/2003679/ndtvindia/ndtvindiamaster.m3u8";
-            case "in.easy10s":
-                return "https://streaming.exclusive.radio/uber/easy2010/icecast.audio";
-            case "uk.capitalfmuk":
-                return "https://media-ssl.musicradio.com/Capital";
-            case "uk.lbc973fm":
-                return "https://media-ssl.musicradio.com/LBCLondon";
-            case "uk.smoothradio1022":
-                return "https://media-ssl.musicradio.com/SmoothLondonMP3";
-            case "us.npr":
-                return "https://npr-ice.streamguys1.com/live.mp3";
-            case "us.977comedy":
-                return "https://playerservices.streamtheworld.com/api/livestream-redirect/977_COMEDY_SC?dist=onlineradiobox";
-            case "us.977todayshits":
-                return "https://playerservices.streamtheworld.com/api/livestream-redirect/977_HITSAAC_SC?dist=onlineradiobox";
-            case "us.wbbr":
-                return "https://playerservices.streamtheworld.com/api/livestream-redirect/WBBRAMAAC.aac?dist=onlineradiobox";
-            default:
-                return "";
         }
     }
 
@@ -395,22 +315,9 @@ public class StreamUrlManager {
         int version = prefs.getInt(KEY_DEFAULTS_VERSION, 0);
         if (prefs.getBoolean(KEY_DEFAULTS_ADDED, false) && version >= DEFAULT_STREAMS_VERSION) return;
 
-        List<String> current = getUrls();
-        boolean changed = false;
-        int originalSize = current.size();
-        current = dedupeUrls(current);
-        changed = current.size() != originalSize;
-        for (String removedUrl : REMOVED_DEFAULT_STREAM_URLS) {
-            if (current.remove(removedUrl)) {
-                changed = true;
-            }
-        }
-        for (String url : DEFAULT_STREAM_URLS) {
-            if (!current.contains(url)) {
-                current.add(url);
-                changed = true;
-            }
-        }
+        List<String> current = getLegacyDirectUrls();
+        boolean changed = !current.isEmpty();
+        current.clear();
 
         List<String> webCurrent = getWebUrls();
         boolean webChanged = false;
