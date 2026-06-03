@@ -33,6 +33,11 @@
             android:name=".MainActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".WebPlayerActivity"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:exported="false" />
+
         <!-- Radio playback service (runs in foreground) -->
         <service
             android:name=".RadioService"

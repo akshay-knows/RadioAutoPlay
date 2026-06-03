@@ -342,22 +342,24 @@ public class RadioService extends Service {
         requestAudioFocus();
 
         try {
-            Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-            browserIntent.addCategory(Intent.CATEGORY_BROWSABLE);
-            browserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            browserIntent.putExtra("com.android.browser.application_id", getPackageName());
-            startActivity(browserIntent);
+            Intent playerIntent = new Intent(this, WebPlayerActivity.class);
+            playerIntent.setAction(WebPlayerActivity.ACTION_PLAY_PAGE);
+            playerIntent.putExtra(WebPlayerActivity.EXTRA_URL, url);
+            playerIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            startActivity(playerIntent);
 
             isPlaying = true;
             String station = getAnnouncementStationName("", url);
             currentUrl = station + "\n" + url;
-            broadcastState(true, null, "Playing in browser");
-            updateNotification("Playing in browser", station);
-            logInfo("Opened webpage in browser requestId=" + requestId + " url=" + url);
+            broadcastState(true, null, "Playing webpage");
+            updateNotification("Playing webpage", station);
+            logInfo("Opened webpage in app player requestId=" + requestId + " url=" + url);
         } catch (Exception e) {
-            logError("Could not open webpage in browser", e);
-            broadcastState(false, "Could not open webpage in browser", "Browser launch failed");
-            updateNotification("Browser launch failed", url);
+            logError("Could not open webpage player", e);
+            broadcastState(false, "Could not open webpage player", "Web player launch failed");
+            updateNotification("Web player failed", url);
         }
     }
 
@@ -627,11 +629,25 @@ public class RadioService extends Service {
         cancelIntroStartDelay();
         releaseIntroPlayerOnly();
         stopOfflineFallback(false);
+        closeWebPlayerActivity();
         releaseWebViewOnly();
         if (broadcastIdle) {
             broadcastState(false, null);
         }
         abandonAudioFocus();
+    }
+
+    private void closeWebPlayerActivity() {
+        try {
+            Intent stopIntent = new Intent(this, WebPlayerActivity.class);
+            stopIntent.setAction(WebPlayerActivity.ACTION_STOP_PAGE);
+            stopIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            startActivity(stopIntent);
+        } catch (Exception e) {
+            logWarn("Could not close webpage player: " + e.getMessage());
+        }
     }
 
     private void handleWebPageFailed(int requestId, String reason) {
