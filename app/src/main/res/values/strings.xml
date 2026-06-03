@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Radio AutoPlay</string>
-    <string name="changelog_v1_1">v1.19\n- Keeps saved OnlineRadioBox entries as webpage links\n- Resolves the matching OnlineRadioBox page stream internally for stable background playback\n- Uses Android MediaPlayer for resolved OnlineRadioBox audio instead of hidden WebView autoplay\n- Keeps WebView playback as fallback for webpage links that do not expose a stream</string>
+    <string name="changelog_v1_1">v1.20\n- Opens saved webpage links with the Android browser after the intro\n- Removes hidden WebView autoplay from the main playback path\n- Lets OnlineRadioBox and other webpage stations start the same way they do in Chrome\n- Keeps the app list, intro, charger trigger, quiet hours, and update flow unchanged</string>
 </resources>

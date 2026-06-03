@@ -35,19 +35,12 @@ import android.webkit.WebViewClient;
 
 import androidx.core.app.NotificationCompat;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.util.Calendar;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Foreground service that manages MediaPlayer for radio streaming.
@@ -91,7 +84,6 @@ public class RadioService extends Service {
     public static final String EXTRA_STATUS    = "status_msg";
 
     private MediaPlayer introPlayer;
-    private MediaPlayer streamPlayer;
     private MediaPlayer offlinePlayer;
     private WebView webViewPlayer;
     private PowerManager.WakeLock wakeLock;
@@ -163,7 +155,6 @@ public class RadioService extends Service {
             }
             if (url != null && url.equals(activePlaybackUrl)
                     && (isPlaying
-                    || streamPlayer != null
                     || webViewPlayer != null
                     || introPlayer != null
                     || offlinePlayer != null
@@ -342,85 +333,31 @@ public class RadioService extends Service {
         activePlaybackUrl = url;
         logInfo("startPlayback requestId=" + requestId + " url=" + url);
 
-        if (isOnlineRadioBoxUrl(url)) {
-            startOnlineRadioBoxPlayback(url, requestId);
-            return;
-        }
-        startWebPageFallback(url, requestId);
+        startBrowserPagePlayback(url, requestId);
     }
 
-    private void startOnlineRadioBoxPlayback(String url, int requestId) {
-        broadcastState(false, null, "Resolving OnlineRadioBox stream");
-        updateNotification("Resolving stream", url);
-        logInfo("Resolving OnlineRadioBox stream requestId=" + requestId + " url=" + url);
-
-        new Thread(() -> {
-            String streamUrl = null;
-            try {
-                String html = fetchText(url);
-                streamUrl = extractOnlineRadioBoxStream(html, url);
-            } catch (Exception e) {
-                logError("OnlineRadioBox stream resolve failed", e);
-            }
-
-            final String resolvedStreamUrl = streamUrl;
-            handler.post(() -> {
-                if (requestId != playbackRequestId) return;
-                if (resolvedStreamUrl == null || resolvedStreamUrl.trim().isEmpty()) {
-                    logWarn("OnlineRadioBox stream was not found; falling back to WebView url=" + url);
-                    startWebPageFallback(url, requestId);
-                    return;
-                }
-                startDirectStreamPlayback(url, resolvedStreamUrl, requestId);
-            });
-        }, "OnlineRadioBoxResolver").start();
-    }
-
-    private void startDirectStreamPlayback(String pageUrl, String streamUrl, int requestId) {
+    private void startBrowserPagePlayback(String url, int requestId) {
         if (requestId != playbackRequestId) return;
         releaseWebViewOnly();
-        releaseStreamPlayerOnly();
         requestAudioFocus();
-        broadcastState(false, null, "Opening audio stream");
-        updateNotification("Opening audio stream", pageUrl);
-        logInfo("startDirectStreamPlayback requestId=" + requestId
-                + " pageUrl=" + pageUrl + " streamUrl=" + streamUrl);
 
         try {
-            streamPlayer = new MediaPlayer();
-            setPlayerAudioMode(streamPlayer);
-            streamPlayer.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
-            streamPlayer.setVolume(NORMALIZED_STREAM_VOLUME, NORMALIZED_STREAM_VOLUME);
-            streamPlayer.setDataSource(getApplicationContext(), Uri.parse(streamUrl),
-                    createStreamHeaders(pageUrl));
-            streamPlayer.setOnPreparedListener(mp -> {
-                if (requestId != playbackRequestId) return;
-                try {
-                    mp.start();
-                    isPlaying = true;
-                    String station = getAnnouncementStationName("", pageUrl);
-                    currentUrl = station + "\n" + pageUrl;
-                    broadcastState(true, null, "Playing stream");
-                    updateNotification("Playing stream", station);
-                    logInfo("Direct stream started requestId=" + requestId + " station=" + station);
-                } catch (Exception e) {
-                    logError("Could not start direct stream", e);
-                    startWebPageFallback(pageUrl, requestId);
-                }
-            });
-            streamPlayer.setOnErrorListener((mp, what, extra) -> {
-                logWarn("Direct stream error what=" + what + " extra=" + extra);
-                if (requestId == playbackRequestId) {
-                    releaseStreamPlayerOnly();
-                    startWebPageFallback(pageUrl, requestId);
-                }
-                return true;
-            });
-            streamPlayer.prepareAsync();
+            Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            browserIntent.addCategory(Intent.CATEGORY_BROWSABLE);
+            browserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            browserIntent.putExtra("com.android.browser.application_id", getPackageName());
+            startActivity(browserIntent);
+
+            isPlaying = true;
+            String station = getAnnouncementStationName("", url);
+            currentUrl = station + "\n" + url;
+            broadcastState(true, null, "Playing in browser");
+            updateNotification("Playing in browser", station);
+            logInfo("Opened webpage in browser requestId=" + requestId + " url=" + url);
         } catch (Exception e) {
-            logError("Could not open direct stream", e);
-            releaseStreamPlayerOnly();
-            startWebPageFallback(pageUrl, requestId);
+            logError("Could not open webpage in browser", e);
+            broadcastState(false, "Could not open webpage in browser", "Browser launch failed");
+            updateNotification("Browser launch failed", url);
         }
     }
 
@@ -654,84 +591,6 @@ public class RadioService extends Service {
         }
     }
 
-    private boolean isOnlineRadioBoxUrl(String url) {
-        if (url == null || url.trim().isEmpty()) return false;
-        try {
-            String host = Uri.parse(url).getHost();
-            return host != null && host.toLowerCase(Locale.US).contains("onlineradiobox.com");
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
-
-    private String fetchText(String url) throws IOException {
-        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
-        connection.setConnectTimeout(12_000);
-        connection.setReadTimeout(12_000);
-        connection.setRequestMethod("GET");
-        for (Map.Entry<String, String> header : createPlayerHeaders().entrySet()) {
-            connection.setRequestProperty(header.getKey(), header.getValue());
-        }
-
-        StringBuilder body = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                body.append(line).append('\n');
-            }
-        } finally {
-            connection.disconnect();
-        }
-        return body.toString();
-    }
-
-    private String extractOnlineRadioBoxStream(String html, String pageUrl) {
-        if (html == null || html.isEmpty()) return "";
-        String stationCode = extractOnlineRadioBoxStationCode(pageUrl);
-        if (!stationCode.isEmpty()) {
-            String byCode = findStreamForRadioId(html, stationCode);
-            if (!byCode.isEmpty()) return byCode;
-        }
-        String setRadioButton = findFirstTagById(html, "set_radio_button");
-        String stream = findAttribute(setRadioButton, "stream");
-        if (!stream.isEmpty()) return cleanHtmlAttribute(stream);
-        return cleanHtmlAttribute(findAttribute(html, "stream"));
-    }
-
-    private String findStreamForRadioId(String html, String radioId) {
-        Pattern buttonPattern = Pattern.compile("<button\\b[^>]*>", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = buttonPattern.matcher(html);
-        while (matcher.find()) {
-            String tag = matcher.group();
-            if (radioId.equalsIgnoreCase(findAttribute(tag, "radioId"))) {
-                String stream = findAttribute(tag, "stream");
-                if (!stream.isEmpty()) return cleanHtmlAttribute(stream);
-            }
-        }
-        return "";
-    }
-
-    private String findFirstTagById(String html, String id) {
-        Pattern pattern = Pattern.compile("<[^>]*\\bid\\s*=\\s*([\"'])"
-                + Pattern.quote(id) + "\\1[^>]*>", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = pattern.matcher(html);
-        return matcher.find() ? matcher.group() : "";
-    }
-
-    private String findAttribute(String text, String attributeName) {
-        if (text == null || text.isEmpty()) return "";
-        Pattern pattern = Pattern.compile("\\b" + Pattern.quote(attributeName)
-                + "\\s*=\\s*([\"'])(.*?)\\1", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = pattern.matcher(text);
-        return matcher.find() ? matcher.group(2) : "";
-    }
-
-    private String cleanHtmlAttribute(String value) {
-        if (value == null) return "";
-        return value.replace("&amp;", "&").trim();
-    }
-
     private String jsString(String value) {
         if (value == null) return "";
         return value.replace("\\", "\\\\").replace("'", "\\'");
@@ -767,7 +626,6 @@ public class RadioService extends Service {
         activePlaybackUrl = null;
         cancelIntroStartDelay();
         releaseIntroPlayerOnly();
-        releaseStreamPlayerOnly();
         stopOfflineFallback(false);
         releaseWebViewOnly();
         if (broadcastIdle) {
@@ -787,14 +645,6 @@ public class RadioService extends Service {
         headers.put("User-Agent", "Mozilla/5.0 (Linux; Android 13; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
         headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8");
         headers.put("Upgrade-Insecure-Requests", "1");
-        return headers;
-    }
-
-    private Map<String, String> createStreamHeaders(String pageUrl) {
-        Map<String, String> headers = new LinkedHashMap<>();
-        headers.put("User-Agent", "Mozilla/5.0 (Linux; Android 13) RadioAutoPlay/1.0");
-        headers.put("Referer", pageUrl);
-        headers.put("Icy-MetaData", "1");
         return headers;
     }
 
@@ -826,19 +676,6 @@ public class RadioService extends Service {
                 Log.e(TAG, "Error releasing intro player", e);
             }
             introPlayer = null;
-        }
-    }
-
-    private void releaseStreamPlayerOnly() {
-        if (streamPlayer != null) {
-            try {
-                if (streamPlayer.isPlaying()) streamPlayer.stop();
-                streamPlayer.reset();
-                streamPlayer.release();
-            } catch (Exception e) {
-                Log.e(TAG, "Error releasing stream player", e);
-            }
-            streamPlayer = null;
         }
     }
 
@@ -915,7 +752,7 @@ public class RadioService extends Service {
 
     private void stopForQuietHoursIfNeeded() {
         if (!isQuietHoursNow()) return;
-        if (!isPlaying && introPlayer == null && streamPlayer == null && offlinePlayer == null) return;
+        if (!isPlaying && introPlayer == null && offlinePlayer == null) return;
 
         broadcastState(false, null, "Quiet hours started. Playback paused until 6:00 AM");
         updateNotification("Quiet hours", currentUrl);
