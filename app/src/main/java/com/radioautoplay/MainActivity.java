@@ -160,7 +160,7 @@ public class MainActivity extends AppCompatActivity {
         etNewUrl      = findViewById(R.id.et_new_url);
         rvUrls        = findViewById(R.id.rv_urls);
         TextView version = findViewById(R.id.tv_app_version);
-        version.setText("v" + BuildConfig.VERSION_NAME);
+        version.setText(BuildConfig.VERSION_NAME);
     }
 
     // ── RecyclerView ──────────────────────────────────────────────────────────
@@ -338,8 +338,8 @@ public class MainActivity extends AppCompatActivity {
             etNewUrl.setError("Please enter a URL");
             return;
         }
-        if (!url.startsWith("http://") && !url.startsWith("https://")) {
-            etNewUrl.setError("URL must start with http:// or https://");
+        if (!StreamUrlManager.isPlayableStreamUrl(url)) {
+            etNewUrl.setError("Enter a direct audio stream URL, not a webpage");
             return;
         }
         urlManager.addUrl(url);
@@ -368,7 +368,7 @@ public class MainActivity extends AppCompatActivity {
             if (added > 0) {
                 Toast.makeText(this, "Imported " + added + " stream URL(s).", Toast.LENGTH_LONG).show();
             } else if (links.isEmpty()) {
-                Toast.makeText(this, "No http:// or https:// stream links found in that CSV.", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "No direct audio stream links found in that CSV.", Toast.LENGTH_LONG).show();
             } else {
                 Toast.makeText(this, "All links in that CSV were already saved.", Toast.LENGTH_LONG).show();
             }
@@ -458,7 +458,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean isValidStreamUrl(String value) {
-        return value.startsWith("http://") || value.startsWith("https://");
+        return StreamUrlManager.isPlayableStreamUrl(value);
     }
 
     private void playIndex(int index) {

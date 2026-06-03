@@ -55,6 +55,8 @@ public class UrlAdapter extends RecyclerView.Adapter<UrlAdapter.ViewHolder> {
         String url = urls.get(position);
         h.tvStationName.setText(StreamUrlManager.getRadioNameForUrl(url));
         h.tvUrl.setText(url);
+        h.tvUrl.setLinksClickable(false);
+        h.tvUrl.setMovementMethod(null);
 
         // Highlight the currently playing / selected stream
         h.itemView.setSelected(position == activeIndex);
