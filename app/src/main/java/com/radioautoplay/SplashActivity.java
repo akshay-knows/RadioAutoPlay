@@ -21,7 +21,7 @@ public class SplashActivity extends AppCompatActivity {
 
         ImageView logo = findViewById(R.id.iv_splash_logo);
         TextView version = findViewById(R.id.tv_splash_version);
-        version.setText("v" + BuildConfig.VERSION_NAME);
+        version.setText("v" + BuildConfig.VERSION_NAME + " (stable)");
         logo.startAnimation(AnimationUtils.loadAnimation(this, R.anim.splash_pulse));
 
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
