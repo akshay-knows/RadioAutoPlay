@@ -54,6 +54,7 @@ public class UrlAdapter extends RecyclerView.Adapter<UrlAdapter.ViewHolder> {
     public void onBindViewHolder(@NonNull ViewHolder h, int position) {
         String url = urls.get(position);
         h.tvStationName.setText(StreamUrlManager.getRadioNameForUrl(url));
+        h.tvStationLanguage.setText(StreamUrlManager.getLanguageLabelForUrl(url));
         h.tvUrl.setText(url);
         h.tvUrl.setLinksClickable(false);
         h.tvUrl.setMovementMethod(null);
@@ -77,13 +78,14 @@ public class UrlAdapter extends RecyclerView.Adapter<UrlAdapter.ViewHolder> {
     public int getItemCount() { return urls.size(); }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
-        TextView   tvIndex, tvStationName, tvUrl;
+        TextView   tvIndex, tvStationName, tvStationLanguage, tvUrl;
         ImageButton btnDelete, btnPlay;
 
         ViewHolder(View v) {
             super(v);
             tvIndex   = v.findViewById(R.id.tv_index);
             tvStationName = v.findViewById(R.id.tv_station_name);
+            tvStationLanguage = v.findViewById(R.id.tv_station_language);
             tvUrl     = v.findViewById(R.id.tv_url);
             btnDelete = v.findViewById(R.id.btn_delete);
             btnPlay   = v.findViewById(R.id.btn_play);

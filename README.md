@@ -26,6 +26,7 @@ It was built for a simple but fun setup: a spare Android phone, speakers, and a 
 | 40-second startup window | Gives the phone/network time to settle and preload the webpage player |
 | Random intro sounds | Plays one bundled or custom intro sound before the station |
 | Webpage station mode | Opens one saved radio webpage in a hidden WebView, similar to a browser |
+| Hindi/English filter | Keeps autoplay Hindi-only by default, with a switch to include English stations |
 | OnlineRadioBox support | Finds the matching station player and starts it without overlapping other page audio |
 | Volume normalizer | Keeps playback at a safer consistent level across loud and quiet stations |
 | Quiet hours toggle | Optional silent window from 12:00 AM to 6:00 AM |
@@ -38,14 +39,14 @@ It was built for a simple but fun setup: a spare Android phone, speakers, and a 
 
 ## Latest Version
 
-Current app version: **v1.23**
+Current app version: **v1.24**
 
 Download the latest APK from [GitHub Releases](https://github.com/akshay-knows/RadioAutoPlay/releases/latest).
 
-The v1.23 APK is also archived here after the release workflow finishes:
+The v1.24 APK is also archived here after the release workflow finishes:
 
 ```text
-apk-releases/v1.23/RadioAutoPlay-v1.23.apk
+apk-releases/v1.24/RadioAutoPlay-v1.24.apk
 ```
 
 ## How It Works
@@ -154,9 +155,9 @@ Android does not allow normal apps to silently update themselves, so the final i
 5. Push a matching tag:
 
 ```bash
-git tag -a v1.23 -m "Radio AutoPlay v1.23"
+git tag -a v1.24 -m "Radio AutoPlay v1.24"
 git push origin main
-git push origin v1.23
+git push origin v1.24
 ```
 
 The `Release APK` workflow builds the signed APK, archives it in the repo, and creates a GitHub Release.

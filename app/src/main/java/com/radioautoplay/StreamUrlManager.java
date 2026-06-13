@@ -25,11 +25,12 @@ public class StreamUrlManager {
     private static final String KEY_QUIET_HOURS  = "quiet_hours_enabled";
     private static final String KEY_START_DELAY  = "start_delay_enabled";
     private static final String KEY_VISUALIZER   = "visualizer_enabled";
+    private static final String KEY_ENGLISH_STATIONS = "english_stations_enabled";
     private static final String KEY_DEFAULTS_ADDED = "default_streams_added";
     private static final String KEY_DEFAULTS_VERSION = "default_streams_version";
     private static final String KEY_WEB_URLS = "web_stream_urls";
     private static final String KEY_WEB_STATIONS_DEFAULT = "web_stations_default";
-    private static final int DEFAULT_STREAMS_VERSION = 10;
+    private static final int DEFAULT_STREAMS_VERSION = 11;
 
     private static final String[] DEFAULT_WEB_STREAM_URLS = {
             "https://onlineradiofm.in/stations/mirchi",
@@ -64,7 +65,11 @@ public class StreamUrlManager {
             "https://onlineradiofm.in/stations/all-india-air-akashvani",
             "https://onlineradiobox.com/in/?cs=in.easy60s&played=1&p=4&tzLoc=Asia%2FCalcutta",
             "https://onlineradiobox.com/in/Karnataka-/?cs=in.easy10s&played=1",
-            "https://onlineradiobox.com/genre/talk/?cs=ca.cbcrtoronto&played=1&p=1&tzLoc=Asia%2FCalcutta"
+            "https://onlineradiobox.com/genre/talk/?cs=ca.cbcrtoronto&played=1&p=1&tzLoc=Asia%2FCalcutta",
+            "https://onlineradiobox.com/in/easy10s/?cs=in.easy10s&played=1",
+            "https://onlineradiobox.com/us/?cs=in.easy90s&played=1",
+            "https://onlineradiobox.com/us/absolutechillout/?cs=us.absolutechillout&played=1",
+            "https://onlineradiobox.com/us/New_York?cs=us.wkyh&played=1&p=8&tzLoc=Asia%2FCalcutta"
 
 
     };
@@ -173,14 +178,17 @@ public class StreamUrlManager {
 
         int idx;
         if (isShuffleEnabled() && urls.size() > 1) {
-            // Pick a different index than the current one
-            int current = getActiveIndex();
-            do { idx = random.nextInt(urls.size()); } while (idx == current && urls.size() > 1);
+            String currentUrl = getCurrentUrl();
+            do { idx = random.nextInt(urls.size()); }
+            while (urls.get(idx).equals(currentUrl) && urls.size() > 1);
         } else {
-            idx = (getActiveIndex() + 1) % urls.size();
+            String currentUrl = getCurrentUrl();
+            int current = urls.indexOf(currentUrl);
+            idx = (current + 1) % urls.size();
         }
-        setActiveIndex(idx);
-        return urls.get(idx);
+        String nextUrl = urls.get(idx);
+        setActiveIndex(indexOfUrl(nextUrl));
+        return nextUrl;
     }
 
     /** Returns the currently active URL without advancing. */
@@ -242,6 +250,14 @@ public class StreamUrlManager {
         prefs.edit().putBoolean(KEY_VISUALIZER, enabled).apply();
     }
 
+    public boolean isEnglishStationsEnabled() {
+        return prefs.getBoolean(KEY_ENGLISH_STATIONS, false);
+    }
+
+    public void setEnglishStationsEnabled(boolean enabled) {
+        prefs.edit().putBoolean(KEY_ENGLISH_STATIONS, enabled).apply();
+    }
+
     public boolean isEmpty() {
         return getAllPlaybackUrls().isEmpty();
     }
@@ -290,7 +306,62 @@ public class StreamUrlManager {
     }
 
     public List<String> getAutoPlaybackUrls() {
-        return getWebUrls();
+        List<String> urls = isEnglishStationsEnabled() ? getWebUrls() : getHindiUrls();
+        return urls.isEmpty() ? getWebUrls() : urls;
+    }
+
+    public List<String> getEnglishUrls() {
+        List<String> english = new ArrayList<>();
+        for (String url : getWebUrls()) {
+            if (isEnglishStationUrl(url)) {
+                english.add(url);
+            }
+        }
+        return english;
+    }
+
+    public List<String> getHindiUrls() {
+        List<String> hindi = new ArrayList<>();
+        for (String url : getWebUrls()) {
+            if (!isEnglishStationUrl(url)) {
+                hindi.add(url);
+            }
+        }
+        return hindi;
+    }
+
+    public static String getLanguageLabelForUrl(String url) {
+        return isEnglishStationUrl(url) ? "English" : "Hindi";
+    }
+
+    public static boolean isEnglishStationUrl(String url) {
+        if (url == null) return false;
+        String value = url.trim().toLowerCase();
+        String code = getOnlineRadioBoxStationCode(value);
+        if (code.startsWith("us.") || code.startsWith("uk.") || code.startsWith("ca.")) return true;
+        return value.contains("bbc-world-servie")
+                || value.contains("bbc-world-service")
+                || value.contains("bbc-asian-network")
+                || value.contains("capitalfmuk")
+                || value.contains("lbc973fm")
+                || value.contains("smoothradio1022")
+                || value.contains("977todayshits")
+                || value.contains("977comedy")
+                || value.contains("wbbr")
+                || value.contains("npr")
+                || value.contains("cbcrtoronto")
+                || value.contains("/genre/talk/");
+    }
+
+    private int indexOfUrl(String candidate) {
+        List<String> all = getWebUrls();
+        String candidateKey = duplicateKey(candidate);
+        for (int i = 0; i < all.size(); i++) {
+            if (duplicateKey(all.get(i)).equals(candidateKey)) {
+                return i;
+            }
+        }
+        return 0;
     }
 
     private void syncDefaultStreamsIfNeeded() {
@@ -441,6 +512,12 @@ public class StreamUrlManager {
                 return ".977 Today's Hits";
             case "us.wbbr":
                 return "Bloomberg Radio";
+            case "us.absolutechillout":
+                return "Absolute Chillout";
+            case "us.wkyh":
+                return "WKYH";
+            case "in.easy90s":
+                return "Easy 90s";
             default:
                 return "";
         }

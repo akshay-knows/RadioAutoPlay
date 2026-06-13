@@ -54,6 +54,7 @@ public class MainActivity extends AppCompatActivity {
     private SwitchMaterial switchVisualizer;
     private SwitchMaterial switchShuffle;
     private SwitchMaterial switchQuietHours;
+    private SwitchMaterial switchEnglishStations;
     private EditText   etNewUrl;
     private RecyclerView rvUrls;
 
@@ -115,6 +116,7 @@ public class MainActivity extends AppCompatActivity {
         refreshVisualizerSwitch();
         refreshShuffleSwitch();
         refreshQuietHoursSwitch();
+        refreshEnglishStationsSwitch();
         requestNotificationPermissionIfNeeded();
         ChargerMonitorService.start(this);
         updateManager.register();
@@ -130,6 +132,9 @@ public class MainActivity extends AppCompatActivity {
         refreshAppEnabledSwitch();
         refreshStartDelaySwitch();
         refreshVisualizerSwitch();
+        refreshShuffleSwitch();
+        refreshQuietHoursSwitch();
+        refreshEnglishStationsSwitch();
         refreshList();
         startIfAlreadyCharging();
     }
@@ -158,6 +163,7 @@ public class MainActivity extends AppCompatActivity {
         switchVisualizer = findViewById(R.id.switch_visualizer);
         switchShuffle = findViewById(R.id.switch_shuffle);
         switchQuietHours = findViewById(R.id.switch_quiet_hours);
+        switchEnglishStations = findViewById(R.id.switch_english_stations);
         etNewUrl      = findViewById(R.id.et_new_url);
         rvUrls        = findViewById(R.id.rv_urls);
         TextView version = findViewById(R.id.tv_app_version);
@@ -281,6 +287,14 @@ public class MainActivity extends AppCompatActivity {
                     Toast.LENGTH_SHORT).show();
         });
 
+        switchEnglishStations.setOnCheckedChangeListener((btn, checked) -> {
+            urlManager.setEnglishStationsEnabled(checked);
+            Toast.makeText(this,
+                    checked ? "English stations included in autoplay"
+                            : "Hindi-only autoplay",
+                    Toast.LENGTH_SHORT).show();
+        });
+
     }
 
     private void refreshAppEnabledSwitch() {
@@ -317,6 +331,10 @@ public class MainActivity extends AppCompatActivity {
 
     private void refreshQuietHoursSwitch() {
         switchQuietHours.setChecked(urlManager.isQuietHoursEnabled());
+    }
+
+    private void refreshEnglishStationsSwitch() {
+        switchEnglishStations.setChecked(urlManager.isEnglishStationsEnabled());
     }
 
     private boolean isQuietHoursNow() {

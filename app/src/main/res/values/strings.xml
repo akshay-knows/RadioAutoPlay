@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Radio AutoPlay</string>
-    <string name="changelog_v1_1">v1.23\n- Restores the larger webpage radio station list\n- Opens station pages inside Radio AutoPlay again\n- Auto-launches the app when charger playback starts\n- Accepts manually added webpage station links</string>
+    <string name="changelog_v1_1">v1.24\n- Adds Hindi/English station grouping\n- Keeps charger autoplay Hindi-only by default\n- Adds a toggle to include English stations in autoplay\n- Adds four new OnlineRadioBox station links</string>
 </resources>
