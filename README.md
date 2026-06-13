@@ -38,14 +38,14 @@ It was built for a simple but fun setup: a spare Android phone, speakers, and a 
 
 ## Latest Version
 
-Current app version: **v1.21**
+Current app version: **v1.22**
 
 Download the latest APK from [GitHub Releases](https://github.com/akshay-knows/RadioAutoPlay/releases/latest).
 
-The v1.21 APK is also archived here after the release workflow finishes:
+The v1.22 APK is also archived here after the release workflow finishes:
 
 ```text
-apk-releases/v1.21/RadioAutoPlay-v1.21.apk
+apk-releases/v1.22/RadioAutoPlay-v1.22.apk
 ```
 
 ## How It Works
@@ -63,7 +63,7 @@ ChargerReceiver starts RadioService
 Random intro sound
       |
       v
-Hidden WebView opens one station webpage
+In-app web player opens one station webpage
       |
       v
 Intro finishes -> autoplay script starts that page player
@@ -154,9 +154,9 @@ Android does not allow normal apps to silently update themselves, so the final i
 5. Push a matching tag:
 
 ```bash
-git tag -a v1.21 -m "Radio AutoPlay v1.21"
+git tag -a v1.22 -m "Radio AutoPlay v1.22"
 git push origin main
-git push origin v1.21
+git push origin v1.22
 ```
 
 The `Release APK` workflow builds the signed APK, archives it in the repo, and creates a GitHub Release.

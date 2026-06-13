@@ -131,6 +131,7 @@ public class MainActivity extends AppCompatActivity {
         refreshStartDelaySwitch();
         refreshVisualizerSwitch();
         refreshList();
+        startIfAlreadyCharging();
     }
 
     @Override
@@ -233,7 +234,9 @@ public class MainActivity extends AppCompatActivity {
                 stopService();
                 showAppDisabledState();
             } else {
+                ChargerMonitorService.start(this);
                 updatePlaybackUI(false, null, null, null);
+                startIfAlreadyCharging();
             }
             Toast.makeText(this,
                     checked ? "Radio AutoPlay ON" : "Radio AutoPlay OFF",
@@ -506,6 +509,13 @@ public class MainActivity extends AppCompatActivity {
         startService(i);
         serviceRunning = false;
         updatePlaybackUI(false, null, null, null);
+    }
+
+    private void startIfAlreadyCharging() {
+        if (serviceRunning || !urlManager.isAppEnabled() || urlManager.isEmpty()) return;
+        if (ChargerReceiver.isPowerConnected(this)) {
+            ChargerReceiver.handlePowerAction(this, Intent.ACTION_POWER_CONNECTED);
+        }
     }
 
     // ── UI helpers ────────────────────────────────────────────────────────────

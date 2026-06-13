@@ -3,6 +3,8 @@ package com.radioautoplay;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.util.Log;
 
@@ -33,6 +35,10 @@ public class ChargerReceiver extends BroadcastReceiver {
                 || Intent.ACTION_LOCKED_BOOT_COMPLETED.equals(action)
                 || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
             ChargerMonitorService.start(context);
+            if (isPowerConnected(context)) {
+                Log.d(TAG, "Device already charging after boot/update – starting autoplay.");
+                handlePowerAction(context, Intent.ACTION_POWER_CONNECTED);
+            }
             return;
         }
 
@@ -61,6 +67,16 @@ public class ChargerReceiver extends BroadcastReceiver {
             Log.d(TAG, "Charger disconnected – stopping playback.");
             stopService(context);
         }
+    }
+
+    public static boolean isPowerConnected(Context context) {
+        Intent battery = context.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        if (battery == null) return false;
+        int status = battery.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+        int plugged = battery.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0);
+        return status == BatteryManager.BATTERY_STATUS_CHARGING
+                || status == BatteryManager.BATTERY_STATUS_FULL
+                || plugged != 0;
     }
 
     private static synchronized boolean isDuplicate(String action) {
