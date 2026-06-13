@@ -12,13 +12,13 @@ import java.util.Random;
 import java.util.Set;
 
 /**
- * Manages direct audio stream URLs and playback settings.
+ * Manages the list of radio stream URLs.
+ * Stored in SharedPreferences – no hardcoded links.
  */
 public class StreamUrlManager {
 
     private static final String PREF_NAME       = "radio_prefs";
     private static final String KEY_URLS         = "stream_urls";
-    private static final String KEY_WEB_URLS     = "web_stream_urls";
     private static final String KEY_ACTIVE_IDX   = "active_index";
     private static final String KEY_APP_ENABLED  = "app_enabled";
     private static final String KEY_SHUFFLE      = "shuffle_mode";
@@ -27,30 +27,53 @@ public class StreamUrlManager {
     private static final String KEY_VISUALIZER   = "visualizer_enabled";
     private static final String KEY_DEFAULTS_ADDED = "default_streams_added";
     private static final String KEY_DEFAULTS_VERSION = "default_streams_version";
-    private static final int DEFAULT_STREAMS_VERSION = 9;
+    private static final String KEY_WEB_URLS = "web_stream_urls";
+    private static final String KEY_WEB_STATIONS_DEFAULT = "web_stations_default";
+    private static final int DEFAULT_STREAMS_VERSION = 10;
 
-    private static final String[] DEFAULT_STREAM_URLS = {
-            "https://stream.live.vc.bbcmedia.co.uk/bbc_world_service",
-            "https://eu8.fastcast4u.com/proxy/clyedupq?mp=%2F1?aw_0_req_lsid=2c0fae177108c9a42a7cf24878625444",
-            "https://stream.zeno.fm/dbstwo3dvhhtv",
-            "https://stream.zeno.fm/6quh1pfnt1duv",
-            "https://s8.voscast.com:7021/stream",
-            "https://drive.uber.radio/uber-app/bollywooddance/icecast.audio",
-            "https://srv01.onlineradio.voaplus.com/kissfm",
-            "https://server.mixify.in:8010/radio.mp3",
-            "https://live.cmr24.net/CMR/Desi_Music-MQ/icecast.audio",
-            "https://ice42.securenetsystems.net/KQBK?playSessionID=893715E2-D578-F731-09E75DFFEE53C84F",
-            "https://stream.zeno.fm/a2gyqzwpwfeuv",
-            "https://www.streamcontrol.net:8444/s/12010/",
-            "https://uksoutha.streaming.broadcast.radio/awazfm",
-            "https://cp11.serverse.com/proxy/foxfm/stream",
-            "https://media-ssl.musicradio.com/HeartLondon",
-            "https://media-ssl.musicradio.com/Capital",
-            "https://virgin.live.stream.broadcasting.news/stream",
-            "https://ice8.securenetsystems.net/EASY96",
-            "https://npr-ice.streamguys1.com/live.mp3",
-            "https://apnews.cdnstream1.com/apnews",
-            "https://tunein.cdnstream1.com/3519_96.mp3"
+    private static final String[] DEFAULT_WEB_STREAM_URLS = {
+            "https://onlineradiofm.in/stations/mirchi",
+            "https://onlineradiofm.in/stations/vividh-bharati",
+            "https://onlineradiofm.in/stations/fm-gold",
+            "https://onlineradiofm.in/stations/fm-rainbow",
+            "https://onlineradiofm.in/stations/bbc-hindi",
+            "https://onlineradiofm.in/stations/air-bhopal",
+            "https://onlineradiofm.in/stations/cmr-hindi-fm",
+            "https://onlineradiofm.in/stations/hungama-90s-once-again",
+            "https://onlineradiofm.in/stations/hungama-hot-now-bollywood",
+            "https://onlineradiofm.in/stations/city-mohammed-rafi",
+            "https://onlineradiofm.in/stations/city-kishore-kumar",
+            "https://onlineradiofm.in/stations/bollywood-and-beyond",
+            "https://onlineradiofm.in/stations/mirchi-new-jersey",
+            "https://onlineradiofm.in/stations/mirchi-bay-area",
+            "https://onlineradiofm.in/stations/hungama-punjabi-hits",
+            "https://onlineradiofm.in/stations/hungama-mehfil",
+            "https://onlineradiofm.in/stations/radio-hungama-hot-now-telugu",
+            "https://onlineradiofm.in/stations/bbc-world-servie",
+            "https://onlineradiofm.in/stations/bbc-asian-network",
+            "https://onlineradiobox.com/us/wbbr/?cs=us.wbbr&played=1",
+            "https://onlineradiobox.com/us/977todayshits/?cs=us.977todayshits&played=1",
+            "https://onlineradiobox.com/us/977comedy/?cs=us.977comedy&played=1",
+            "https://onlineradiobox.com/us/?cs=us.npr&played=1",
+            "https://onlineradiobox.com/uk/capitalfmuk/?cs=uk.capitalfmuk&played=1",
+            "https://onlineradiobox.com/uk/?cs=uk.lbc973fm&played=1",
+            "https://onlineradiobox.com/uk/?cs=uk.smoothradio1022&played=1",
+            "https://onlineradiobox.com/in/?cs=in.karanaujla&played=1&p=4&tzLoc=Asia%2FCalcutta",
+            "https://onlineradiobox.com/in/?cs=in.air&played=1&p=7&tzLoc=Asia%2FCalcutta",
+            "https://onlineradiobox.com/in/?cs=za.hindvaniradio&played=1&p=1&sf_langs=hi%2C&tzLoc=Asia%2FCalcutta",
+            "https://onlineradiofm.in/stations/all-india-air-akashvani",
+            "https://onlineradiobox.com/in/?cs=in.easy60s&played=1&p=4&tzLoc=Asia%2FCalcutta",
+            "https://onlineradiobox.com/in/Karnataka-/?cs=in.easy10s&played=1",
+            "https://onlineradiobox.com/genre/talk/?cs=ca.cbcrtoronto&played=1&p=1&tzLoc=Asia%2FCalcutta"
+
+
+    };
+
+    private static final String[] REMOVED_DEFAULT_WEB_STREAM_URLS = {
+            "https://onlineradiobox.com/search?cs=uk.capitalfmuk&played=1&q=capital&radioid=1018&tzLoc=Asia%2FCalcutta",
+            "https://onlineradiobox.com/in/?cs=in.ndtv&played=1",
+            "https://onlineradiobox.com/in/genre/news/?cs=in.ndtvindia&played=1",
+            "https://onlineradiobox.com/in/?cs=in.aajtak&played=1&p=3&tzLoc=Asia%2FCalcutta"
     };
 
     private final SharedPreferences prefs;
@@ -65,48 +88,61 @@ public class StreamUrlManager {
         } else {
             prefs = appContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         }
-        syncDirectStreamsIfNeeded();
+        syncDefaultStreamsIfNeeded();
     }
 
-    public List<String> getUrls() {
+    // ── URL list ──────────────────────────────────────────────────────────────
+
+    private List<String> getLegacyDirectUrls() {
         Set<String> set = prefs.getStringSet(KEY_URLS, new LinkedHashSet<>());
         return new ArrayList<>(set);
     }
 
+    public List<String> getWebUrls() {
+        Set<String> set = prefs.getStringSet(KEY_WEB_URLS, new LinkedHashSet<>());
+        return new ArrayList<>(set);
+    }
+
     public List<String> getAllPlaybackUrls() {
-        return getUrls();
+        return getWebUrls();
     }
 
     public void addUrl(String url) {
-        if (!isPlayableStreamUrl(url)) return;
-        List<String> current = getUrls();
+        if (url == null || url.trim().isEmpty()) return;
+        url = url.trim();
+        List<String> current = getWebUrls();
         if (!containsEquivalentUrl(current, url)) {
-            current.add(url.trim());
-            saveList(current);
+            current.add(url);
+            saveWebList(current);
         }
     }
 
     public int addUrls(List<String> urls) {
         if (urls == null || urls.isEmpty()) return 0;
 
-        List<String> current = getUrls();
+        List<String> current = getWebUrls();
         int added = 0;
         for (String url : urls) {
-            if (isPlayableStreamUrl(url) && !containsEquivalentUrl(current, url)) {
-                current.add(url.trim());
+            if (url == null) continue;
+            url = url.trim();
+            if (!url.isEmpty() && !containsEquivalentUrl(current, url)) {
+                current.add(url);
                 added++;
             }
         }
 
-        if (added > 0) saveList(current);
+        if (added > 0) {
+            saveWebList(current);
+        }
         return added;
     }
 
     public void removeUrl(int index) {
-        List<String> current = getUrls();
+        List<String> current = getWebUrls();
         if (index >= 0 && index < current.size()) {
             current.remove(index);
-            saveList(current);
+            saveWebList(current);
+            // Adjust active index if needed
             int active = getActiveIndex();
             if (active >= current.size()) {
                 setActiveIndex(Math.max(0, current.size() - 1));
@@ -115,27 +151,31 @@ public class StreamUrlManager {
     }
 
     public void updateUrl(int index, String newUrl) {
-        if (!isPlayableStreamUrl(newUrl)) return;
-        List<String> current = getUrls();
+        if (newUrl == null || newUrl.trim().isEmpty()) return;
+        List<String> current = getWebUrls();
         if (index >= 0 && index < current.size()) {
             current.set(index, newUrl.trim());
-            saveList(current);
+            saveWebList(current);
         }
     }
 
-    private void saveList(List<String> list) {
+    private void saveWebList(List<String> list) {
         LinkedHashSet<String> set = new LinkedHashSet<>(dedupeUrls(list));
-        prefs.edit().putStringSet(KEY_URLS, set).apply();
+        prefs.edit().putStringSet(KEY_WEB_URLS, set).apply();
     }
 
+    // ── Active URL ────────────────────────────────────────────────────────────
+
+    /** Returns the URL that should be played next (shuffled or sequential). */
     public String getNextUrl() {
-        List<String> urls = getAllPlaybackUrls();
+        List<String> urls = getAutoPlaybackUrls();
         if (urls.isEmpty()) return null;
 
         int idx;
         if (isShuffleEnabled() && urls.size() > 1) {
+            // Pick a different index than the current one
             int current = getActiveIndex();
-            do { idx = random.nextInt(urls.size()); } while (idx == current);
+            do { idx = random.nextInt(urls.size()); } while (idx == current && urls.size() > 1);
         } else {
             idx = (getActiveIndex() + 1) % urls.size();
         }
@@ -143,8 +183,9 @@ public class StreamUrlManager {
         return urls.get(idx);
     }
 
+    /** Returns the currently active URL without advancing. */
     public String getCurrentUrl() {
-        List<String> urls = getAllPlaybackUrls();
+        List<String> urls = getAutoPlaybackUrls();
         if (urls.isEmpty()) return null;
         int idx = getActiveIndex();
         if (idx >= urls.size()) idx = 0;
@@ -158,6 +199,8 @@ public class StreamUrlManager {
     public void setActiveIndex(int index) {
         prefs.edit().putInt(KEY_ACTIVE_IDX, index).apply();
     }
+
+    // ── Shuffle ───────────────────────────────────────────────────────────────
 
     public boolean isShuffleEnabled() {
         return prefs.getBoolean(KEY_SHUFFLE, true);
@@ -208,16 +251,26 @@ public class StreamUrlManager {
         value = value.trim().toLowerCase();
         return (value.startsWith("http://") || value.startsWith("https://"))
                 && !value.startsWith("blob:")
-                && !value.endsWith(".html")
-                && !value.endsWith(".htm")
                 && !value.contains("/watch?")
                 && !value.contains("youtube.com")
-                && !value.contains("youtu.be")
-                && !value.contains("onlineradiobox.com")
-                && !value.contains("onlineradiofm.in/stations");
+                && !value.contains("youtu.be");
     }
 
     public static String getRadioNameForUrl(String url) {
+        String onlineRadioBoxName = getKnownOnlineRadioBoxName(url);
+        if (!onlineRadioBoxName.isEmpty()) return onlineRadioBoxName;
+
+        String onlineRadioBoxCode = getOnlineRadioBoxStationCode(url);
+        if (!onlineRadioBoxCode.isEmpty()) {
+            int dot = onlineRadioBoxCode.lastIndexOf('.');
+            String stationCode = dot >= 0 && dot < onlineRadioBoxCode.length() - 1
+                    ? onlineRadioBoxCode.substring(dot + 1) : onlineRadioBoxCode;
+            return titleCase(stationCode.replace("-", " ").replace("_", " "));
+        }
+
+        String slugName = getSlugStationName(url);
+        if (!slugName.isEmpty()) return slugName;
+
         try {
             Uri uri = Uri.parse(url);
             String host = uri.getHost();
@@ -228,39 +281,55 @@ public class StreamUrlManager {
         }
     }
 
-    private void syncDirectStreamsIfNeeded() {
+    public boolean isWebStationsDefault() {
+        return prefs.getBoolean(KEY_WEB_STATIONS_DEFAULT, false);
+    }
+
+    public void setWebStationsDefault(boolean enabled) {
+        prefs.edit().putBoolean(KEY_WEB_STATIONS_DEFAULT, enabled).apply();
+    }
+
+    public List<String> getAutoPlaybackUrls() {
+        return getWebUrls();
+    }
+
+    private void syncDefaultStreamsIfNeeded() {
         int version = prefs.getInt(KEY_DEFAULTS_VERSION, 0);
         if (prefs.getBoolean(KEY_DEFAULTS_ADDED, false) && version >= DEFAULT_STREAMS_VERSION) return;
 
-        List<String> current = getUrls();
-        current.addAll(readLegacyWebUrls());
-        current = dedupeUrls(current);
-        List<String> playable = new ArrayList<>();
-        for (String url : current) {
-            if (isPlayableStreamUrl(url)) {
-                playable.add(url);
+        List<String> current = getLegacyDirectUrls();
+        boolean changed = !current.isEmpty();
+        current.clear();
+
+        List<String> webCurrent = getWebUrls();
+        boolean webChanged = false;
+        int originalWebSize = webCurrent.size();
+        webCurrent = dedupeUrls(webCurrent);
+        webChanged = webCurrent.size() != originalWebSize;
+        for (String removedUrl : REMOVED_DEFAULT_WEB_STREAM_URLS) {
+            if (removeExactUrl(webCurrent, removedUrl)) {
+                webChanged = true;
             }
         }
-        current = playable;
-
-        for (String url : DEFAULT_STREAM_URLS) {
-            if (isPlayableStreamUrl(url) && !containsEquivalentUrl(current, url)) {
-                current.add(url);
+        for (String url : DEFAULT_WEB_STREAM_URLS) {
+            if (!containsEquivalentUrl(webCurrent, url)) {
+                webCurrent.add(url);
+                webChanged = true;
             }
         }
 
-        LinkedHashSet<String> directSet = new LinkedHashSet<>(current);
-        prefs.edit()
-                .putStringSet(KEY_URLS, directSet)
-                .remove(KEY_WEB_URLS)
+        SharedPreferences.Editor editor = prefs.edit()
                 .putBoolean(KEY_DEFAULTS_ADDED, true)
-                .putInt(KEY_DEFAULTS_VERSION, DEFAULT_STREAMS_VERSION)
-                .apply();
-    }
-
-    private List<String> readLegacyWebUrls() {
-        Set<String> set = prefs.getStringSet(KEY_WEB_URLS, new LinkedHashSet<>());
-        return new ArrayList<>(set);
+                .putInt(KEY_DEFAULTS_VERSION, DEFAULT_STREAMS_VERSION);
+        if (changed) {
+            LinkedHashSet<String> set = new LinkedHashSet<>(current);
+            editor.putStringSet(KEY_URLS, set);
+        }
+        if (webChanged) {
+            LinkedHashSet<String> set = new LinkedHashSet<>(webCurrent);
+            editor.putStringSet(KEY_WEB_URLS, set);
+        }
+        editor.apply();
     }
 
     private List<String> dedupeUrls(List<String> urls) {
@@ -272,7 +341,7 @@ public class StreamUrlManager {
             if (url == null) continue;
             String cleaned = url.trim();
             if (cleaned.isEmpty()) continue;
-            String key = normalizeUrl(cleaned);
+            String key = duplicateKey(cleaned);
             if (seenKeys.add(key)) {
                 deduped.add(cleaned);
             }
@@ -282,22 +351,132 @@ public class StreamUrlManager {
 
     private boolean containsEquivalentUrl(List<String> urls, String candidate) {
         if (candidate == null || urls == null) return false;
-        String candidateKey = normalizeUrl(candidate);
+        String candidateKey = duplicateKey(candidate.trim());
         for (String url : urls) {
-            if (url != null && normalizeUrl(url).equals(candidateKey)) {
+            if (url != null && duplicateKey(url.trim()).equals(candidateKey)) {
                 return true;
             }
         }
         return false;
     }
 
-    private String normalizeUrl(String url) {
+    private boolean removeExactUrl(List<String> urls, String candidate) {
+        if (candidate == null || urls == null) return false;
+        String candidateKey = normalizeExactUrl(candidate);
+        for (int i = 0; i < urls.size(); i++) {
+            String url = urls.get(i);
+            if (url != null && normalizeExactUrl(url).equals(candidateKey)) {
+                urls.remove(i);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String normalizeExactUrl(String url) {
         if (url == null) return "";
         String normalized = url.trim().toLowerCase();
         while (normalized.endsWith("/")) {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
         return normalized;
+    }
+
+    private String duplicateKey(String url) {
+        if (url == null) return "";
+        String cleaned = url.trim();
+        if (cleaned.isEmpty()) return "";
+        try {
+            Uri uri = Uri.parse(cleaned);
+            String host = uri.getHost();
+            if (host != null && host.toLowerCase().contains("onlineradiobox.com")) {
+                String stationCode = uri.getQueryParameter("cs");
+                if (stationCode != null && !stationCode.trim().isEmpty()) {
+                    return "onlineradiobox:" + stationCode.trim().toLowerCase();
+                }
+            }
+        } catch (Exception ignored) {
+        }
+
+        String normalized = cleaned.toLowerCase();
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private static String getKnownOnlineRadioBoxName(String url) {
+        String code = getOnlineRadioBoxStationCode(url);
+        if (code.isEmpty()) return "";
+        switch (code) {
+            case "ca.cbcrtoronto":
+                return "CBC Radio One";
+            case "in.aajtak":
+                return "Aaj Tak Radio";
+            case "in.air":
+                return "AIR Patiala 100.2 FM";
+            case "in.easy60s":
+                return "Easy 60s";
+            case "in.karanaujla":
+                return "Karan Aujla Radio";
+            case "in.ndtv":
+                return "NDTV 24x7 Radio";
+            case "za.hindvaniradio":
+                return "Hindvani Radio";
+            case "in.ndtvindia":
+                return "NDTV India";
+            case "in.easy10s":
+                return "Easy 10s";
+            case "uk.capitalfmuk":
+                return "Capital FM";
+            case "uk.lbc973fm":
+                return "LBC";
+            case "uk.smoothradio1022":
+                return "Smooth Radio";
+            case "us.npr":
+                return "NPR Radio";
+            case "us.977comedy":
+                return ".977 Comedy";
+            case "us.977todayshits":
+                return ".977 Today's Hits";
+            case "us.wbbr":
+                return "Bloomberg Radio";
+            default:
+                return "";
+        }
+    }
+
+    private static String getOnlineRadioBoxStationCode(String url) {
+        if (url == null || url.trim().isEmpty()) return "";
+        try {
+            Uri uri = Uri.parse(url);
+            String host = uri.getHost();
+            if (host == null || !host.toLowerCase().contains("onlineradiobox.com")) {
+                return "";
+            }
+            String code = uri.getQueryParameter("cs");
+            return code != null ? code.trim().toLowerCase() : "";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private static String getSlugStationName(String url) {
+        if (url == null || url.trim().isEmpty()) return "";
+        try {
+            Uri uri = Uri.parse(url);
+            String host = uri.getHost();
+            if (host == null || !host.toLowerCase().contains("onlineradiofm.in")) {
+                return "";
+            }
+            List<String> segments = uri.getPathSegments();
+            if (segments.isEmpty()) return "";
+            String slug = segments.get(segments.size() - 1);
+            if (slug == null || slug.trim().isEmpty()) return "";
+            return titleCase(slug.replace("-", " "));
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     private static String titleCase(String value) {
@@ -307,8 +486,12 @@ public class StreamUrlManager {
         for (String part : parts) {
             if (part.isEmpty()) continue;
             if (result.length() > 0) result.append(' ');
-            result.append(Character.toUpperCase(part.charAt(0)));
-            if (part.length() > 1) result.append(part.substring(1));
+            if (part.length() <= 3 && part.equals(part.toLowerCase())) {
+                result.append(part.toUpperCase());
+            } else {
+                result.append(Character.toUpperCase(part.charAt(0)));
+                if (part.length() > 1) result.append(part.substring(1));
+            }
         }
         return result.toString();
     }

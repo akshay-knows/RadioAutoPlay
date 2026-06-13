@@ -342,7 +342,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         if (!StreamUrlManager.isPlayableStreamUrl(url)) {
-            etNewUrl.setError("Enter a direct audio stream URL, not a webpage");
+            etNewUrl.setError("Enter a radio webpage or stream URL");
             return;
         }
         urlManager.addUrl(url);
@@ -369,9 +369,9 @@ public class MainActivity extends AppCompatActivity {
             refreshList();
 
             if (added > 0) {
-                Toast.makeText(this, "Imported " + added + " stream URL(s).", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Imported " + added + " radio link(s).", Toast.LENGTH_LONG).show();
             } else if (links.isEmpty()) {
-                Toast.makeText(this, "No direct audio stream links found in that CSV.", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "No radio webpage links found in that CSV.", Toast.LENGTH_LONG).show();
             } else {
                 Toast.makeText(this, "All links in that CSV were already saved.", Toast.LENGTH_LONG).show();
             }

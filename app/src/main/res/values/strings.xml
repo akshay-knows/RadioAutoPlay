@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Radio AutoPlay</string>
-    <string name="changelog_v1_1">v1.22\n- Starts automatically when the phone is already plugged in, without pressing the app Play button\n- Restarts charger monitoring when the master switch is turned back on\n- Retries webpage play controls with a stronger desktop-browser style click sequence\n- Keeps stations inside Radio AutoPlay instead of opening Chrome</string>
+    <string name="changelog_v1_1">v1.23\n- Restores the larger webpage radio station list\n- Opens station pages inside Radio AutoPlay again\n- Auto-launches the app when charger playback starts\n- Accepts manually added webpage station links</string>
 </resources>

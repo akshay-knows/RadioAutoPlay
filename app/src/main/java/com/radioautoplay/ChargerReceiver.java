@@ -61,6 +61,7 @@ public class ChargerReceiver extends BroadcastReceiver {
             // Advance to next URL (shuffle or sequential based on user setting)
             String url = mgr.getNextUrl();
             Log.d(TAG, "Charger connected – playing: " + url);
+            launchApp(context);
             startService(context, url);
 
         } else if (Intent.ACTION_POWER_DISCONNECTED.equals(action)) {
@@ -104,6 +105,18 @@ public class ChargerReceiver extends BroadcastReceiver {
             }
         } catch (Exception e) {
             Log.e(TAG, "Could not start radio service", e);
+        }
+    }
+
+    private static void launchApp(Context context) {
+        Intent app = new Intent(context, MainActivity.class);
+        app.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        try {
+            context.startActivity(app);
+        } catch (Exception e) {
+            Log.e(TAG, "Could not auto-launch app UI", e);
         }
     }
 
